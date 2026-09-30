@@ -1,0 +1,36 @@
+[project]
+name = "garmin-mcp"
+version = "0.1.0"
+description = "Remote MCP server exposing Garmin Connect data to Claude"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+# Exact pins; uv.lock pins the transitive tree. Bump deliberately.
+dependencies = [
+    "garminconnect==0.3.17",
+    "mcp==2.2.0",
+    "cryptography==50.0.1",
+    "google-cloud-secret-manager==2.30.0",
+    "uvicorn==0.54.0",
+    "httpx2==2.13.1",
+]
+
+[project.scripts]
+garmin-mcp = "garmin_mcp.server:main"
+garmin-mcp-login = "garmin_mcp.login_cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest==9.1.1",
+    "pip-audit==2.10.1",
+]
+
+[build-system]
+requires = ["hatchling==1.32.4"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/garmin_mcp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+.env.local
+data/
+*.fernet
+garmin_tokens.json
+infra/config.env

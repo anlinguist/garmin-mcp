@@ -1,0 +1,26 @@
+# Installed by bootstrap-vm.sh, which fills in the domain placeholder and turns
+# the TLS placeholder into a `tls` line when a Cloudflare Origin cert exists in /etc/caddy/certs
+# (Cloudflare proxy, SSL Full strict); otherwise Caddy's automatic HTTPS is used.
+# No access `log` directive on purpose: request URIs on /authorize and
+# /github/callback carry OAuth codes/state in the query string.
+
+__DOMAIN__ {
+	__TLS__
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		X-Frame-Options DENY
+		-Server
+	}
+
+	# No `encode` here: compression would buffer streamed responses.
+	reverse_proxy 127.0.0.1:8000 {
+		# Flush every write immediately (SSE / streamable HTTP).
+		flush_interval -1
+		# Keep open streams alive across Caddy config reloads.
+		stream_close_delay 5m
+		# Caddy's default read/write/response-header timeouts are unlimited,
+		# so long-running tool calls are not cut off.
+	}
+}

@@ -64,7 +64,7 @@ export function PlanSheet({ goal, week, onAsk, onUploadPlan, onEdit, onClose, on
           {goal.plan ? (
             <section className="panel">
               <p className="mb-1 text-[0.5882rem] font-semibold uppercase tracking-widest text-muted-foreground">Rabbit's summary</p>
-              <div className="prose prose-sm max-w-none text-foreground prose-p:my-1 prose-li:my-0">
+              <div className="chat-text prose prose-sm text-[0.9412rem]! max-w-none text-foreground prose-headings:mb-1 prose-headings:mt-3 prose-headings:text-[0.8235rem] prose-headings:uppercase prose-headings:tracking-widest prose-headings:text-muted-foreground prose-p:my-1 prose-li:my-0 prose-ul:my-1">
                 <Markdown remarkPlugins={[remarkGfm]}>{goal.plan}</Markdown>
               </div>
             </section>

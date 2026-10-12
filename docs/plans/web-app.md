@@ -451,6 +451,17 @@ Residual risks to accept explicitly:
 - Conversation content is sent to the Anthropic API.
 - Andrew, as server operator, can technically decrypt the friend's data.
 
+## Known iOS limitations (accepted for now)
+
+- **Keyboard settle:** when a text field is focused, iOS pans the page to keep it above the
+  keyboard and the visual-viewport frame follows a beat later, so the layout briefly jitters.
+  Safari has no `interactive-widget=resizes-content`. Anticipating the keyboard height
+  (shrinking the frame on touchend) was tried and reverted: the field moved out from under
+  the finger and the keyboard stopped opening. Real fix: a native shell (Capacitor
+  `Keyboard.resize`).
+- **Keyboard accessory bar** (arrows + checkmark) can't be hidden from the web.
+- **Haptics:** only the native text-selection tick (used by the long-press menu).
+
 ## Open questions for Andrew
 
 1. **Branding**: reuse Dolly's look (tokens, fonts) as-is, or give the coach its own palette/name? The tokens make this a small change either way.

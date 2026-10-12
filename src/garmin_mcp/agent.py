@@ -18,6 +18,7 @@ thinking blocks live only inside their turn, which is append-only.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import secrets
@@ -316,6 +317,17 @@ class Agent:
             st.add_text(t)
             emit({"type": "text-delta", "text": t})
 
+        try:
+            return await self._loop(user_id, messages, st, emit, on_text, finish)
+        except asyncio.CancelledError:
+            if st.text:
+                st.add_text(" …(stopped)")
+            finish("done")
+            raise
+
+    async def _loop(self, user_id: str, messages: list[dict[str, Any]], st: _TurnState,
+                    emit: Emit, on_text: Callable[[str], Awaitable[None]],
+                    finish: Callable[..., dict[str, Any]]) -> dict[str, Any]:
         for _ in range(MAX_ITERATIONS):
             try:
                 resp = await self._backend.turn(system=SYSTEM_PROMPT, tools=AGENT_TOOLS,

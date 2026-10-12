@@ -10,11 +10,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getJSON } from '@/lib/api'
 import { attachTurn, sendChat, type StreamEvent } from '@/lib/agent-stream'
+import type { AttachmentMeta } from '@/lib/attachments'
 
 export type ChatMessage = {
   kind: 'message'; id: string; role: 'user' | 'agent'; text: string; error?: boolean
   /** coach-log metadata: which stored turn this came from, and what kind */
   turnId?: string; ts?: number; label?: 'brief' | 'workout' | 'note' | null; turnKind?: string
+  attachments?: AttachmentMeta[]
 }
 export type ThreadLink = { kind: 'link'; id: string; threadId: string; fromTurn: string | null; ts: number }
 export type ToolCall = {
@@ -31,6 +33,7 @@ type Part =
 type StoredTurn = {
   id: string; ts: number; kind: 'chat' | 'proactive' | 'seed' | 'link'
   label?: 'brief' | 'workout' | null; user: string | null; parts: Part[]
+  attachments?: AttachmentMeta[]
 }
 
 let seq = 0
@@ -39,7 +42,10 @@ const uid = (p: string) => `${p}-${Date.now().toString(36)}-${(seq++).toString(3
 function turnsToItems(turns: StoredTurn[]): ChatItem[] {
   const items: ChatItem[] = []
   for (const t of turns) {
-    if (t.user) items.push({ kind: 'message', id: `${t.id}-u`, role: 'user', text: t.user, ts: t.ts })
+    if (t.user) {
+      const text = t.attachments?.length && t.user === '(see attached)' ? '' : t.user
+      items.push({ kind: 'message', id: `${t.id}-u`, role: 'user', text, ts: t.ts, attachments: t.attachments })
+    }
     let first = true
     t.parts.forEach((p, i) => {
       if (p.type === 'thread_link') {
@@ -171,16 +177,16 @@ export function useCoach(threadId: string | null, activeTurn: string | null) {
     return () => document.removeEventListener('visibilitychange', onVisible)
   }, [reattach, loadHistory])
 
-  const send = useCallback(async (text: string) => {
+  const send = useCallback(async (text: string, attachments: AttachmentMeta[] = []) => {
     const message = text.trim()
-    if (!message || busy.current || !threadId) return
+    if ((!message && !attachments.length) || busy.current || !threadId) return
     busy.current = true
     openMsg.current = null
-    setItems((prev) => [...prev, { kind: 'message', id: uid('u'), role: 'user', text: message }])
+    setItems((prev) => [...prev, { kind: 'message', id: uid('u'), role: 'user', text: message, attachments }])
     setStatus('streaming')
     let dropped = false
     try {
-      dropped = await consume(sendChat(message, threadId))
+      dropped = await consume(sendChat(message, threadId, attachments.map((a) => a.id)))
     } finally {
       busy.current = false
       if (dropped && document.visibilityState === 'visible') void reattach()
@@ -190,5 +196,14 @@ export function useCoach(threadId: string | null, activeTurn: string | null) {
 
   const clear = useCallback(() => setItems([]), [])
 
-  return { items, status, send, clear, reload: loadHistory }
+  const stop = useCallback(async () => {
+    const t = turnRef.current
+    if (!t) return
+    await fetch(`/app/api/chat/${encodeURIComponent(t.id)}/cancel`, {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' }, body: '{}',
+    }).catch(() => {})
+  }, [])
+
+  return { items, status, send, stop, clear, reload: loadHistory }
 }

@@ -42,6 +42,7 @@ class Turn:
     record: dict[str, Any] | None = None  # the stored turn, once finished
     _subs: list[asyncio.Queue] = field(default_factory=list, repr=False)
     _finished: asyncio.Event = field(default_factory=asyncio.Event, repr=False)
+    _task: asyncio.Task | None = field(default=None, repr=False)
 
     def emit(self, event: dict[str, Any]) -> None:
         self.events.append(event)
@@ -104,6 +105,8 @@ class ChatRunner:
                         user_id, text, turn.emit, thread_id=thread_id, turn_id=turn.id,
                         kind=kind, label=label, attachments=attachments,
                         content_blocks=content_blocks)
+            except asyncio.CancelledError:
+                pass  # stopped by the user; agent.run already saved the partial turn
             except Exception as e:  # agent.run handles its own errors; this is a backstop
                 turn.emit({"type": "result", "response": {
                     "status": "error", "turnId": turn.id,
@@ -114,9 +117,18 @@ class ChatRunner:
                     del self._active[user_id]
 
         task = asyncio.get_running_loop().create_task(go())
+        turn._task = task
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
         return turn
+
+    def cancel(self, user_id: str, turn_id: str) -> bool:
+        """Stop a running turn; the agent saves what was written so far."""
+        turn = self.get(user_id, turn_id)
+        if turn is None or turn.done or turn._task is None:
+            return False
+        turn._task.cancel()
+        return True
 
     async def events(self, turn: Turn, start: int = 0) -> AsyncIterator[dict[str, Any] | None]:
         """Replay events from ``start``, then follow live ones. Yields None as a heartbeat."""

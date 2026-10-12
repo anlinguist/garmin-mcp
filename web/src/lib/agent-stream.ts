@@ -59,14 +59,15 @@ async function* readNdjson(response: Response): AsyncGenerator<StreamEvent> {
 }
 
 /** Start a turn. A 409 means one is already running: re-attach to it instead. */
-export async function* sendChat(message: string, threadId: string, signal?: AbortSignal):
+export async function* sendChat(message: string, threadId: string, attachmentIds: string[] = [],
+  signal?: AbortSignal):
   AsyncGenerator<StreamEvent | { type: 'turn-id'; turnId: string }> {
   let response: Response
   try {
     response = await fetch('/app/api/chat', {
       method: 'POST', credentials: 'same-origin', signal,
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ message, thread_id: threadId }),
+      body: JSON.stringify({ message, thread_id: threadId, attachments: attachmentIds }),
     })
   } catch {
     yield errorResult("Couldn't reach Rabbit. Check your connection.", false)

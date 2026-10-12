@@ -5,6 +5,8 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { cn } from '@/lib/utils'
 import type { ChatMessage } from '@/hooks/useCoach'
+import { FileText } from 'lucide-react'
+import { attachmentUrl, formatFileSize } from '@/lib/attachments'
 
 const REMARK_PLUGINS = [remarkGfm]
 
@@ -20,7 +22,30 @@ export const MessageBubble = memo(function MessageBubble({ message, showLabel }:
           {isUser ? 'You' : 'Rabbit'}
         </span>
       )}
-      <div className={cn(
+      {message.attachments && message.attachments.length > 0 && (
+        <div className={cn('flex max-w-[85%] flex-wrap gap-1.5', isUser ? 'justify-end' : 'justify-start')}>
+          {message.attachments.map((a) => a.kind === 'image' ? (
+            <a key={a.id} href={attachmentUrl(a.id)} target="_blank" rel="noopener"
+              className="block overflow-hidden rounded-xl border border-border shadow-sm">
+              <img src={attachmentUrl(a.id)} alt={a.name} loading="lazy"
+                className="max-h-56 max-w-[220px] object-cover" />
+            </a>
+          ) : (
+            // Dolly's MessageFileCard
+            <a key={a.id} href={attachmentUrl(a.id)} target="_blank" rel="noopener"
+              className="inline-flex min-w-[140px] max-w-[220px] items-center gap-2 rounded-lg border border-border bg-background p-1.5 shadow-sm transition-colors hover:bg-secondary/50">
+              <span className="flex h-7 w-8 shrink-0 items-center justify-center rounded bg-accent font-mono text-[9px] font-bold tracking-wide text-white">
+                {a.kind === 'pdf' ? 'PDF' : <FileText className="size-3.5" />}
+              </span>
+              <span className="flex min-w-0 flex-col pr-2">
+                <span className="truncate text-xs font-medium text-foreground">{a.name}</span>
+                <span className="mt-0.5 font-mono text-[10px] leading-none text-muted-foreground">{formatFileSize(a.size)}</span>
+              </span>
+            </a>
+          ))}
+        </div>
+      )}
+      {message.text && <div className={cn(
         'relative min-w-0 max-w-[85%] overflow-hidden break-words rounded-xl px-3.5 py-2.5 text-[14px] leading-relaxed shadow-sm',
         isUser
           ? 'rounded-tr-sm border border-black/10 bg-[var(--msg-user-bg)] text-[var(--msg-user-text)]'
@@ -35,7 +60,7 @@ export const MessageBubble = memo(function MessageBubble({ message, showLabel }:
             <Markdown remarkPlugins={REMARK_PLUGINS}>{message.text}</Markdown>
           </div>
         )}
-      </div>
+      </div>}
     </div>
   )
 })

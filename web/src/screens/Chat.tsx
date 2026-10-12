@@ -57,7 +57,7 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
   const [threads, setThreads] = useState<Thread[]>([])
   const [goal, setGoal] = useState<Goal | null>(me.goal)
   const [threadId, setThreadId] = useState<string | null>(null)
-  const { items, status, send, reload } = useCoach(threadId, me.chat.active_turn)
+  const { items, status, send, stop, reload } = useCoach(threadId, me.chat.active_turn)
   const [sheet, setSheet] = useState<Sheet | null>(me.garmin.connected ? null : 'settings')
   const [closing, setClosing] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -206,7 +206,9 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
 
       <Composer
         disabled={status !== 'idle' || !me.chat.available || !threadId}
-        onSend={(t) => void send(t)}
+        streaming={status === 'streaming'}
+        onStop={() => void stop()}
+        onSend={(t, a) => void send(t, a)}
         placeholder={!me.chat.available ? 'Chat isn’t configured yet' : status === 'streaming' ? 'Rabbit is replying…' : 'Ask Rabbit…'}
       />
 

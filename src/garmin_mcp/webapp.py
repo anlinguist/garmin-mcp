@@ -23,6 +23,7 @@ from starlette.staticfiles import StaticFiles
 from starlette.types import Scope
 
 from .appstore import AppStore
+from .attachments import MAX_UPLOAD, AttachmentError, AttachmentStore
 from .coaching import CoachError
 from .config import Settings
 from .garminlogin import Busy, Cooldown, LoginManager
@@ -41,7 +42,7 @@ CSP = "; ".join([
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",  # React/Radix set inline style attributes
-    "img-src 'self' data: https://lh3.googleusercontent.com",  # Google profile photos
+    "img-src 'self' data: blob: https://lh3.googleusercontent.com",  # blob: composer previews
     "font-src 'self'",
     "connect-src 'self'",
     "manifest-src 'self'",
@@ -238,6 +239,36 @@ def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
         logins.disconnect(user_id, token_store)
         return JSONResponse({"ok": True})
 
+    async def attachment_upload(request: Request) -> Response:
+        """Raw-body upload (?name=...). Same guards as _api, minus the JSON content type."""
+        if not host_ok(request):
+            return _err(400, "bad host")
+        user_id = auth.user_for(request)
+        if user_id is None:
+            return _err(401, "not signed in")
+        if request.headers.get("origin", "") != settings.public_base_url:
+            return _err(403, "bad origin")
+        if atts is None:
+            return _err(503, "Chat isn't configured on this server.")
+        declared = int(request.headers.get("content-length") or 0)
+        if declared > MAX_UPLOAD:
+            return _err(413, "File too large.")
+        buf = bytearray()
+        async for chunk in request.stream():
+            buf += chunk
+            if len(buf) > MAX_UPLOAD:
+                return _err(413, "File too large.")
+        try:
+            meta = await anyio.to_thread.run_sync(
+                atts.save, user_id, request.query_params.get("name", ""), bytes(buf))
+        except AttachmentError as e:
+            return _err(400, str(e))
+        except Exception as e:
+            log_event(logger, logging.ERROR, "app_unexpected_error", path=request.url.path,
+                      error=type(e).__name__)
+            return _err(500, f"Internal error ({type(e).__name__})")
+        return JSONResponse(meta, status_code=201)
+
     # ------------------------------------------------------------ settings --
     store: AppStore | None = chat.agent._store if chat is not None else None
 
@@ -302,11 +333,22 @@ def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
     def _thread_or_404(user_id: str, thread_id: Any) -> dict[str, Any] | None:
         return _coach().get_thread(user_id, thread_id) if isinstance(thread_id, str) else None
 
+    atts: AttachmentStore | None = AttachmentStore(store) if store is not None else None
+
     async def chat_send(request: Request, user_id: str) -> Response:
-        if chat is None:
+        if chat is None or atts is None:
             return _err(503, "Chat isn't configured on this server.")
         body = await read_json(request)
-        message = _str(body, "message", 4000).strip()
+        if not isinstance(body, dict):
+            raise ValueError("body")
+        try:
+            metas, blocks = atts.for_message(user_id, body.get("attachments"))
+        except AttachmentError as e:
+            return _err(400, str(e))
+        raw = body.get("message")
+        if not isinstance(raw, str) or len(raw) > 4000 or not (raw.strip() or metas):
+            raise ValueError("message")
+        message = raw.strip() or "(see attached)"
         thread = _thread_or_404(user_id, body.get("thread_id"))
         if thread is None:
             return _err(404, "thread not found")
@@ -315,11 +357,29 @@ def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
             _coach().rename_thread(user_id, thread["id"],
                                    words if len(words) <= 60 else words[:57].rstrip() + "...")
         try:
-            turn = chat.start(user_id, message, thread_id=thread["id"])
+            turn = chat.start(user_id, message, thread_id=thread["id"],
+                              attachments=metas or None, content_blocks=blocks or None)
         except TurnBusy as e:
             return JSONResponse({"error": "A reply is already in progress.",
                                  "turn_id": e.turn_id}, status_code=409)
         return _ndjson(turn, 0)
+
+    async def chat_cancel(request: Request, user_id: str) -> Response:
+        if chat is None:
+            return _err(503, "Chat isn't configured on this server.")
+        return JSONResponse({"ok": chat.cancel(user_id, request.path_params["turn_id"])})
+
+    async def attachment_get(request: Request, user_id: str) -> Response:
+        got = atts.load(user_id, request.path_params["att_id"]) if atts else None
+        if got is None:
+            return _err(404, "not found")
+        meta, data = got
+        headers = {"Cache-Control": "private, max-age=86400", "Content-Disposition": "inline",
+                   "X-Content-Type-Options": "nosniff"}
+        if meta["kind"] == "text":  # user text opened in a tab can't run anything
+            headers["Content-Security-Policy"] = "default-src 'none'; sandbox"
+        mime = "text/plain; charset=utf-8" if meta["kind"] == "text" else meta["mime"]
+        return Response(data, media_type=mime, headers=headers)
 
     async def chat_events(request: Request, user_id: str) -> Response:
         if chat is None:
@@ -509,6 +569,11 @@ def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
         Route("/app/api/dev/{name}", _api(dev_action, mutating=True), methods=["POST"]),
         Route("/app/api/chat", _api(chat_send, mutating=True), methods=["POST"]),
         Route("/app/api/chat/{turn_id}/events", _api(chat_events, mutating=False),
+              methods=["GET"]),
+        Route("/app/api/chat/{turn_id}/cancel", _api(chat_cancel, mutating=True),
+              methods=["POST"]),
+        Route("/app/api/attachments", attachment_upload, methods=["POST"]),
+        Route("/app/api/attachments/{att_id}", _api(attachment_get, mutating=False),
               methods=["GET"]),
         Route("/app/api/threads", _api(threads_list, mutating=False), methods=["GET"]),
         Route("/app/api/threads", _api(thread_create, mutating=True), methods=["POST"]),

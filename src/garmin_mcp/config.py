@@ -116,6 +116,13 @@ class Settings:
     vapid_private_key_secret_name: str = ""
     vapid_subject: str = ""  # mailto: contact sent to push services
 
+    # Rabbit coach agent (Claude API)
+    anthropic_api_key_secret_name: str = ""
+    agent_model: str = "claude-haiku-5-5"
+    agent_effort: str = "low"
+    agent_daily_token_budget: int = 2_000_000
+    agent_max_concurrent: int = 2
+
     @property
     def issuer_url(self) -> str:
         return self.public_base_url
@@ -216,4 +223,11 @@ class Settings:
                 "VAPID_PRIVATE_KEY_SECRET_NAME", "garmin-mcp-vapid-private-key"
             ),
             vapid_subject=os.environ.get("VAPID_SUBJECT", "").strip(),
+            anthropic_api_key_secret_name=os.environ.get(
+                "ANTHROPIC_API_KEY_SECRET_NAME", "garmin-mcp-anthropic-api-key"
+            ),
+            agent_model=os.environ.get("AGENT_MODEL", "claude-haiku-5-5").strip(),
+            agent_effort=os.environ.get("AGENT_EFFORT", "low").strip(),
+            agent_daily_token_budget=_int("AGENT_DAILY_TOKEN_BUDGET", 2_000_000),
+            agent_max_concurrent=_int("AGENT_MAX_CONCURRENT", 2),
         )

@@ -21,8 +21,10 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
+from .agent import Agent, AnthropicBackend
 from .appstore import AppStore
-from .garminlogin import FakeLoginProvider, LoginManager
+from .garminlogin import LoginManager
+from .providers.fake import FakeGarminProvider
 from .auth import SCOPE, GitHubOAuthProvider
 from .config import Settings
 from .logs import log_event, setup_logging
@@ -36,6 +38,7 @@ from .tokens import EncryptedFileTokenStore
 from .tools import GarminService
 from .webapp import build_app_routes
 from .webauth import WebAuth
+from .webchat import ChatRunner
 from .webpush import WebPush
 
 logger = logging.getLogger(__name__)
@@ -162,9 +165,40 @@ def build_app(settings: Settings, service: GarminService,
     return app
 
 
+def _fake_garmin(settings: Settings) -> bool:
+    """RABBIT_FAKE_GARMIN=1: scripted logins and canned data, no Garmin network.
+
+    Only for the Rabbit-only process: it would replace real data in the MCP server.
+    """
+    if os.environ.get("RABBIT_FAKE_GARMIN", "").strip() != "1":
+        return False
+    if settings.mcp_enabled:
+        # Never swap fake data into the MCP server, and never fail its startup over it.
+        log_event(logger, logging.ERROR, "rabbit_fake_garmin_ignored", reason="mcp_enabled")
+        return False
+    log_event(logger, logging.WARNING, "rabbit_fake_garmin_enabled")
+    return True
+
+
+def build_chat(settings: Settings, store: AppStore, service: GarminService) -> ChatRunner | None:
+    """Coach agent; None (chat disabled, rest of the app works) without credentials."""
+    import anthropic
+
+    key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    if not key and settings.gcp_project:
+        key = get_secret(settings.anthropic_api_key_secret_name, "ANTHROPIC_API_KEY",
+                         settings.gcp_project)
+    client = anthropic.AsyncAnthropic(api_key=key) if key else anthropic.AsyncAnthropic()
+    backend = AnthropicBackend(client, settings.agent_model, effort=settings.agent_effort)
+    agent = Agent(service, store, backend, daily_token_budget=settings.agent_daily_token_budget,
+                  default_timezone=settings.poll_timezone)
+    return ChatRunner(agent, max_concurrent=settings.agent_max_concurrent)
+
+
 def build_web_routes(settings: Settings, fernet_key: str, token_store: EncryptedFileTokenStore,
                      dev_user: str | None, provider: GarminProvider | None = None,
-                     on_tokens_changed: Any = None) -> list[Any]:
+                     on_tokens_changed: Any = None,
+                     service: GarminService | None = None) -> list[Any]:
     """Rabbit web app routes (/app); empty unless APP_ENABLED."""
     if not settings.app_enabled:
         return []
@@ -185,19 +219,25 @@ def build_web_routes(settings: Settings, fernet_key: str, token_store: Encrypted
             push = WebPush(store, vapid_key, settings.vapid_subject)
         except Exception as e:  # push is optional; the app works without it
             log_event(logger, logging.ERROR, "push_disabled", error=type(e).__name__)
-    fake = os.environ.get("RABBIT_FAKE_GARMIN", "").strip() == "1"
-    if fake:
-        # Scripted logins with no network, for exercising the Connect Garmin UI.
-        log_event(logger, logging.WARNING, "rabbit_fake_garmin_enabled")
-        provider = FakeLoginProvider(token_store)
+    fake = _fake_garmin(settings)
+    if fake and not isinstance(provider, FakeGarminProvider):
+        provider = FakeGarminProvider(token_store)
     logins = None
     if provider is not None:
         logins = LoginManager(provider, store,
                               on_tokens_changed=on_tokens_changed or (lambda user_id: None))
+    chat = None
+    if service is not None:
+        try:
+            chat = build_chat(settings, store, service)
+        except Exception as e:  # chat is optional; sign-in, push and Garmin connect still work
+            log_event(logger, logging.ERROR, "chat_disabled", error=type(e).__name__,
+                      detail=str(e)[:200] if isinstance(e, RuntimeError) else None)
     log_event(logger, logging.INFO, "app_enabled", push=push is not None,
-              garmin_connect=logins is not None, fake_garmin=fake,
+              garmin_connect=logins is not None, fake_garmin=fake, chat=chat is not None,
+              model=settings.agent_model if chat else None,
               allowed_users=len(settings.allowed_google_users))
-    return build_app_routes(settings, auth, token_store, push, logins, fake_garmin=fake)
+    return build_app_routes(settings, auth, token_store, push, logins, chat, fake_garmin=fake)
 
 
 def build_poller(settings: Settings, service: GarminService,
@@ -252,9 +292,11 @@ def create_app() -> tuple[Settings, Any]:
     fernet_key = get_secret(settings.fernet_key_secret_name, "GARMIN_MCP_FERNET_KEY",
                             settings.gcp_project)
     token_store = EncryptedFileTokenStore(settings.token_dir, fernet_key)
-    provider = UnofficialProvider(
+    provider: GarminProvider = UnofficialProvider(
         token_store, impersonate_api_tls=settings.garmin_api_tls_impersonation
     )
+    if _fake_garmin(settings):
+        provider = FakeGarminProvider(token_store)
     registry = Registry()
     service = GarminService(
         provider, registry,
@@ -269,7 +311,7 @@ def create_app() -> tuple[Settings, Any]:
         # endpoint at all, and config errors are fatal here since nothing else
         # depends on this process.
         web_routes = build_web_routes(settings, fernet_key, token_store, dev_user, provider,
-                                      service.cache.clear_user)
+                                      service.cache.clear_user, service)
         if not web_routes:
             raise RuntimeError("MCP_ENABLED=false needs APP_ENABLED=true")
         log_event(logger, logging.INFO, "startup", base_url=settings.public_base_url,

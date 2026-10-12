@@ -1,15 +1,16 @@
 import { useState } from 'react'
 import { Bell, LogOut, Radio, Watch } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Avatar } from '@/components/Avatar'
 import { ConnectGarmin } from '@/components/ConnectGarmin'
-import { RabbitLogo } from '@/components/RabbitLogo'
 import { postJSON, postStream, signOut, type Me } from '@/lib/api'
 import { enablePush, isStandalone, pushSupported, sendTestPush } from '@/lib/push'
 
-// Phase 1 home: account status plus the Phase 0 device checks (push, streaming).
-// The chat replaces most of this in Phase 3.
-export function Home({ me, onChange }: { me: Me; onChange: () => void }) {
+// Settings sheet content: Garmin connection, notifications, device checks, account.
+export function SettingsPanels({ me, onChange, onClearChat }: {
+  me: Me
+  onChange: () => void
+  onClearChat: () => void
+}) {
   const [pushMsg, setPushMsg] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [ticks, setTicks] = useState<string[]>([])
@@ -69,16 +70,7 @@ export function Home({ me, onChange }: { me: Me; onChange: () => void }) {
   }
 
   return (
-    <div className="flex flex-1 flex-col">
-      <header className="flex items-center gap-2 border-b border-(--border) px-4 py-3">
-        <RabbitLogo size={26} />
-        <span className="font-display text-xl text-(--brand)">Rabbit</span>
-        <span className="ml-auto"><Avatar name={me.profile.name || me.user_id} picture={me.profile.picture} /></span>
-        <Button variant="ghost" size="icon" aria-label="Sign out"
-          onClick={() => void signOut().finally(onChange)}><LogOut className="size-4" /></Button>
-      </header>
-
-      <main className="mx-auto flex w-full max-w-md flex-col gap-4 p-4">
+    <div className="flex flex-col gap-4">
         <section className="panel flex flex-col gap-3">
           <div className="flex items-start gap-3">
             <Watch className="mt-0.5 size-5 text-(--accent)" />
@@ -138,7 +130,18 @@ export function Home({ me, onChange }: { me: Me; onChange: () => void }) {
             <pre className="max-h-48 overflow-auto rounded-(--radius) bg-(--bg-inset) p-2 text-[11px]">{ticks.join('\n')}</pre>
           )}
         </section>
-      </main>
+        <section className="panel flex flex-col gap-2">
+          <h2 className="font-medium">Account</h2>
+          <p className="text-sm text-(--text-secondary)">Signed in as {me.profile.name || me.user_id}.</p>
+          <div className="flex flex-wrap gap-2">
+            <Button disabled={busy} onClick={() => {
+              if (window.confirm('Clear your chat history with Rabbit? Your notes and Garmin connection stay.')) onClearChat()
+            }}>Clear chat</Button>
+            <Button variant="ghost" onClick={() => void signOut().finally(onChange)}>
+              <LogOut className="mr-1.5 size-3.5" /> Sign out
+            </Button>
+          </div>
+        </section>
     </div>
   )
 }

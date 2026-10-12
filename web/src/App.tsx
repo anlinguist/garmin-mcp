@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AuthError, getMe, type Me } from './lib/api'
 import { isIOS, isStandalone } from './lib/push'
-import { Home } from './screens/Home'
+import { Chat } from './screens/Chat'
 import { InstallPrompt } from './screens/InstallPrompt'
 import { SignIn } from './screens/SignIn'
 import { RabbitLogo } from './components/RabbitLogo'
@@ -44,7 +44,7 @@ export function App() {
       )}
       {state.kind === 'install' && <InstallPrompt onSkip={() => setSkipInstall(true)} />}
       {state.kind === 'signin' && <SignIn error={state.error} />}
-      {state.kind === 'home' && <Home me={state.me} onChange={load} />}
+      {state.kind === 'home' && <Chat me={state.me} onChange={load} />}
       {state.kind === 'error' && (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
           <RabbitLogo size={40} />

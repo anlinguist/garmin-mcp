@@ -6,6 +6,7 @@ export class AuthError extends Error {}
 export type Me = {
   user_id: string
   profile: { name: string; picture: string }
+  chat: { available: boolean; active_turn: string | null }
   garmin_connected: boolean
   garmin: {
     connected: boolean

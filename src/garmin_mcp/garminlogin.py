@@ -251,42 +251,5 @@ class LoginManager:
                   kind=kind, error=type(exc).__name__)
 
 
-# ------------------------------------------------------------- fake Garmin --
-class FakeLoginProvider(GarminProvider):
-    """Dev only (RABBIT_FAKE_GARMIN=1): scripted logins, no network.
-
-    The email decides the outcome: ``mfa@...`` asks for MFA (code 123456),
-    ``wrong@...`` is rejected, ``429@...`` is rate limited, ``cf@...`` is a
-    Cloudflare block; anything else succeeds. Each call takes ``delay`` seconds.
-    """
-
-    def __init__(self, token_store: Any, delay: float = 2.0) -> None:
-        self._tokens = token_store
-        self._delay = delay
-
-    def get_client(self, user_id: str) -> Any:
-        raise GarminError("Fake Garmin mode has no data yet.")
-
-    def login_start(self, user_id: str, email: str, password: str):
-        from .providers import LoginResult
-
-        time.sleep(self._delay)
-        local = email.split("@")[0].lower()
-        if local == "wrong":
-            from garminconnect import GarminConnectAuthenticationError
-            raise GarminConnectAuthenticationError("fake: bad credentials")
-        if local == "429":
-            raise RateLimited("fake: 429")
-        if local == "cf":
-            raise CloudflareBlocked()
-        if local == "mfa":
-            return LoginResult(LoginStatus.NEEDS_MFA, LoginHandle(user_id, "fake"))
-        self._tokens.save(user_id, '{"fake": true}')
-        return LoginResult(LoginStatus.DONE)
-
-    def login_complete(self, handle: LoginHandle, mfa_code: str) -> None:
-        time.sleep(self._delay)
-        if mfa_code.strip() != "123456":
-            from garminconnect import GarminConnectAuthenticationError
-            raise GarminConnectAuthenticationError("fake: bad mfa")
-        self._tokens.save(handle.user_id, '{"fake": true}')
+# Dev-only scripted provider (logins + data) lives with the other providers.
+from .providers.fake import FakeGarminProvider as FakeLoginProvider  # noqa: E402,F401

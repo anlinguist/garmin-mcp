@@ -25,6 +25,7 @@ from .garminlogin import Busy, Cooldown, LoginManager
 from .logs import log_event
 from .tokens import TokenStore, TokenStoreError
 from .webauth import WebAuth
+from .webchat import ChatRunner, Turn, TurnBusy
 from .webpush import WebPush, parse_subscription
 
 logger = logging.getLogger(__name__)
@@ -76,6 +77,7 @@ async def read_json(request: Request) -> Any:
 
 def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
                      push: WebPush | None, logins: LoginManager | None = None,
+                     chat: ChatRunner | None = None,
                      *, fake_garmin: bool = False) -> list[BaseRoute]:
     local = settings.public_host.split(":")[0] in {"localhost", "127.0.0.1"}
 
@@ -116,6 +118,8 @@ def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
         return JSONResponse({
             "user_id": user_id,
             "profile": auth.profile(user_id),
+            "chat": {"available": chat is not None,
+                     "active_turn": (t.id if chat and (t := chat.active(user_id)) else None)},
             "garmin_connected": connected,
             "garmin": {
                 "connected": connected,
@@ -224,6 +228,67 @@ def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
         logins.disconnect(user_id, token_store)
         return JSONResponse({"ok": True})
 
+    # ---------------------------------------------------------------- chat --
+    def _ndjson(turn: Turn, start: int) -> StreamingResponse:
+        assert chat is not None
+
+        async def gen() -> AsyncIterator[bytes]:
+            async for e in chat.events(turn, start):
+                yield b"\n" if e is None else (json.dumps(e, default=str) + "\n").encode()
+        return StreamingResponse(gen(), media_type="application/x-ndjson",
+                                 headers={"X-Accel-Buffering": "no", "X-Turn-Id": turn.id})
+
+    async def chat_send(request: Request, user_id: str) -> Response:
+        if chat is None:
+            return _err(503, "Chat isn't configured on this server.")
+        body = await read_json(request)
+        message = _str(body, "message", 4000).strip()
+        try:
+            turn = chat.start(user_id, message)
+        except TurnBusy as e:
+            return JSONResponse({"error": "A reply is already in progress.",
+                                 "turn_id": e.turn_id}, status_code=409)
+        return _ndjson(turn, 0)
+
+    async def chat_events(request: Request, user_id: str) -> Response:
+        if chat is None:
+            return _err(503, "Chat isn't configured on this server.")
+        turn = chat.get(user_id, request.path_params["turn_id"])
+        if turn is None:
+            return _err(404, "turn not found")
+        try:
+            start = max(0, int(request.query_params.get("from", "0")))
+        except ValueError:
+            start = 0
+        return _ndjson(turn, start)
+
+    async def messages(request: Request, user_id: str) -> Response:
+        if chat is None:
+            return JSONResponse({"turns": []})
+        try:
+            limit = min(100, max(1, int(request.query_params.get("limit", "50"))))
+        except ValueError:
+            limit = 50
+        turns = chat.agent.history(user_id)
+        before = request.query_params.get("before")
+        if before:
+            idx = next((i for i, t in enumerate(turns) if t.get("id") == before), len(turns))
+            turns = turns[:idx]
+        page = turns[-limit:]
+        return JSONResponse({
+            "turns": [{k: t.get(k) for k in ("id", "ts", "kind", "user", "parts")} for t in page],
+            "has_more": len(turns) > len(page),
+        })
+
+    async def chat_clear(request: Request, user_id: str) -> Response:
+        if chat is None:
+            return _err(503, "Chat isn't configured on this server.")
+        active = chat.active(user_id)
+        if active is not None and not active.done:
+            return _err(409, "Wait for the current reply to finish.")
+        chat.agent.clear_history(user_id)
+        return JSONResponse({"ok": True})
+
     async def diag_stream(request: Request, user_id: str) -> Response:
         """Phase 0: check NDJSON arrives incrementally through Cloudflare + Caddy."""
         async def gen() -> AsyncIterator[bytes]:
@@ -270,6 +335,11 @@ def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
               methods=["POST"]),
         Route("/app/api/push/test", _api(push_test, mutating=True), methods=["POST"]),
         Route("/app/api/diag/stream", _api(diag_stream, mutating=True), methods=["POST"]),
+        Route("/app/api/chat", _api(chat_send, mutating=True), methods=["POST"]),
+        Route("/app/api/chat/clear", _api(chat_clear, mutating=True), methods=["POST"]),
+        Route("/app/api/chat/{turn_id}/events", _api(chat_events, mutating=False),
+              methods=["GET"]),
+        Route("/app/api/messages", _api(messages, mutating=False), methods=["GET"]),
         Route("/app/api/garmin/login", _api(garmin_login, mutating=True), methods=["POST"]),
         Route("/app/api/garmin/login/{job_id}", _api(garmin_login_status, mutating=False),
               methods=["GET"]),

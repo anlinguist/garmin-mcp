@@ -178,7 +178,8 @@ html.kb-open .coach-pins { display: none; }
   border: 1px solid var(--border); border-top: none; border-radius: 0 0 0.75rem 0.75rem;
   background: var(--bg-surface); box-shadow: var(--shadow-lg);
   opacity: 0; visibility: hidden;
-  transition: grid-template-rows 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s ease, visibility 0s linear 0.28s;
+  /* closing: slide up first, fade only at the very end */
+  transition: grid-template-rows 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.1s ease 0.22s, visibility 0s linear 0.32s;
 }
 .week-drawer--open { grid-template-rows: 1fr; opacity: 1; visibility: visible;
   transition: grid-template-rows 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.15s ease, visibility 0s; }

@@ -1,6 +1,6 @@
 // Pinned to the top of the coach log: the plan (tap to open it) and "This week",
 // which expands into planned vs. done by day. Weeks follow the plan's own weeks.
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Activity, Bike, Check, ChevronDown, ChevronRight, Dumbbell, Footprints, Layers, Map as MapIcon, Moon, Waves,
 } from 'lucide-react'
@@ -128,7 +128,18 @@ export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay }: {
   onOpenPlan: () => void
   onAskDay: (day: WeekDay) => void
 }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpenState] = useState(false)
+  // Stay above the dimming until the drawer has finished sliding shut.
+  const [raised, setRaised] = useState(false)
+  const lowerTimer = useRef<number | null>(null)
+  const setOpen = (next: boolean | ((v: boolean) => boolean)) => {
+    const v = typeof next === 'function' ? next(open) : next
+    if (lowerTimer.current) window.clearTimeout(lowerTimer.current)
+    if (v) setRaised(true)
+    else lowerTimer.current = window.setTimeout(() => setRaised(false), 340)
+    setOpenState(v)
+  }
+  useEffect(() => () => { if (lowerTimer.current) window.clearTimeout(lowerTimer.current) }, [])
   const t = week?.totals
   const hasPlan = !!goal.plan
   let progress = ''
@@ -150,7 +161,7 @@ export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay }: {
     <div className={cn('week-dim', open && 'week-dim--open')} onClick={() => setOpen(false)} aria-hidden />
     <div className="coach-pins shrink-0 border-b border-(--border) bg-(--bg) px-3 py-2">
       {/* Only the card rises above the dimming; the drawer slides down over the feed. */}
-      <div className={cn('relative mx-auto max-w-2xl', open && 'z-[46]')}>
+      <div className={cn('relative mx-auto max-w-2xl', raised && 'z-[46]')}>
       <div className={cn('overflow-hidden border border-border bg-(--bg-surface) shadow-sm transition-[border-radius] duration-200',
         open ? 'rounded-t-xl' : 'rounded-xl')}>
         <button onClick={() => setOpen((v) => !v)} aria-expanded={open}

@@ -195,8 +195,8 @@ export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay }: {
     <div className="coach-pins shrink-0 border-b border-(--border) bg-(--bg) px-3 pb-2.5 pt-0">
       {/* Only the card rises above the dimming; the drawer slides down over the feed. */}
       <div className={cn('relative mx-auto max-w-2xl', raised && 'z-[46]')}>
-      <div ref={cardRef} className={cn('overflow-hidden border border-border bg-(--bg-surface) shadow-sm transition-[border-radius] duration-200',
-        open ? 'rounded-t-xl' : 'rounded-xl')}>
+      <div ref={cardRef} className={cn('overflow-hidden border border-border bg-(--bg-surface) shadow-sm',
+        raised ? 'rounded-t-xl' : 'rounded-xl')}>
         <button onClick={() => setOpen((v) => !v)} aria-expanded={open}
           className="flex w-full items-center gap-2 px-3 pb-2 pt-2 text-left">
           <span className="min-w-0 flex-1">

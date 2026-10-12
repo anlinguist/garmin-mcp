@@ -234,3 +234,17 @@ def test_agent_delivery_runs_turn_and_pushes(env) -> None:
     finally:
         loop.call_soon_threadsafe(loop.stop)
         t.join(timeout=5)
+
+
+def test_fast_poll_window_uses_each_users_time_zone(env, monkeypatch) -> None:
+    from garmin_mcp.proactive import Proactive as P
+    p = env.make(users=("friend", "andrew"))
+    env.tokens.save("andrew", '{"fake": true}')
+    p._schedule = Schedule.parse("UTC", "5-9", 5)
+    _profile(env, "friend", brief_enabled=False, timezone="America/Denver")
+    _profile(env, "andrew", brief_enabled=False, timezone="UTC")
+    polled: list[str] = []
+    monkeypatch.setattr(P, "poll", lambda self, u: polled.append(u) or {})
+    env.clock.t = datetime(2026, 10, 12, 13, 5, tzinfo=UTC)  # 07:05 in Denver, 13:05 UTC
+    p.tick()
+    assert polled == ["friend"]  # Denver's 5-9am window; UTC is outside its own window

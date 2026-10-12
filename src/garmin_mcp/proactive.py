@@ -20,6 +20,7 @@ Delivery: the agent turn is stored in the user's chat history (``kind:
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import logging
 import re
 import threading
@@ -139,7 +140,9 @@ class Proactive:
                 continue
             try:
                 profile = self._profile(user_id)
-                if profile.get("workout_feedback", True) and self._schedule.matches(now):
+                # The fast-poll window (e.g. 5-9am) runs in each person's own time zone.
+                schedule = dataclasses.replace(self._schedule, tz=self._zone(profile))
+                if profile.get("workout_feedback", True) and schedule.matches(now):
                     self.poll(user_id)
                 if profile.get("brief_enabled", True):
                     self._maybe_brief(user_id, profile, now)

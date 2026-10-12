@@ -113,12 +113,25 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
     prevStatus.current = status
   }, [status]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // First run: record the phone's time zone so the morning brief lands at local time.
+  // Follow the phone's time zone (first run, and after travel) so "today", the plan week
+  // and the morning brief match where you are. Checked on open and on return to the app.
+  const savedTz = me.settings.timezone_set ? me.settings.timezone : null
+  const tzSent = useRef<string | null>(null)
   useEffect(() => {
-    if (me.settings.timezone_set) return
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
-    if (tz) void putSettings({ timezone: tz }).then(onChange).catch(() => {})
-  }, [me.settings.timezone_set]) // eslint-disable-line react-hooks/exhaustive-deps
+    const check = () => {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+      if (!tz || tz === savedTz || tz === tzSent.current) return
+      tzSent.current = tz
+      void putSettings({ timezone: tz }).then(() => {
+        if (savedTz) showToast(`Time zone updated to ${tz.split('/').pop()!.replace(/_/g, ' ')}`)
+        onChange()
+      }).catch(() => { tzSent.current = null })
+    }
+    check()
+    const onVis = () => { if (document.visibilityState === 'visible') check() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [savedTz]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keyboard opens/closes (or anything else resizes the feed): stay pinned to the newest
   // messages if that's where the user was.

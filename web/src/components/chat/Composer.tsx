@@ -15,6 +15,17 @@ let n = 0
 
 export const ATTACH_INPUT_ID = 'rabbit-attach'
 
+// TEMP: keyboard-gap diagnostics, shown only while the keyboard is open.
+function KbDebug() {
+  const [text, setText] = useState(document.documentElement.dataset.kbDebug ?? '')
+  useEffect(() => {
+    const on = () => setText(document.documentElement.dataset.kbDebug ?? '')
+    window.addEventListener('rabbit-kb-debug', on)
+    return () => window.removeEventListener('rabbit-kb-debug', on)
+  }, [])
+  return <div className="kb-debug mt-1 text-center font-mono text-[9px] text-(--text-muted)">{text}</div>
+}
+
 export function Composer({ disabled, streaming, onSend, onStop, placeholder, draft }: {
   disabled: boolean
   streaming: boolean
@@ -184,6 +195,7 @@ export function Composer({ disabled, streaming, onSend, onStop, placeholder, dra
           </button>
         )}
       </div>
+      <KbDebug />
     </div>
   )
 }

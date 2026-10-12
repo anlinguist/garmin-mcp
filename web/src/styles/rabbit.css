@@ -140,3 +140,5 @@ html.msg-menu-open .selectable, html.msg-menu-open .selectable * { -webkit-user-
 /* Keyboard open (lib/viewport.ts): the home indicator is under the keyboard, so the
    composer doesn't need its safe-area padding. Layout is otherwise left to iOS. */
 html.kb-open .composer-bar { padding-bottom: 8px; }
+.kb-debug { display: none; }
+html.kb-open .kb-debug { display: block; }

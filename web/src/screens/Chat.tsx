@@ -241,7 +241,8 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="flex shrink-0 items-center gap-2 border-b border-(--border) px-3 pb-2.5 pt-[max(10px,env(safe-area-inset-top))]">
+      {/* With the week card pinned under it, the card itself separates header and feed. */}
+      <header className={`flex shrink-0 items-center gap-2 px-3 pb-2.5 pt-[max(10px,env(safe-area-inset-top))] ${showPins ? '' : 'border-b border-(--border)'}`}>
         {/* Rabbit + your goal: home, i.e. the coach log */}
         <button className="flex min-w-0 flex-1 items-center gap-2 pl-1 text-left" aria-label="Coach log"
           onClick={() => { if (coachId) openThread(coachId) }}>

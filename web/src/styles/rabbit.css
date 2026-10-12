@@ -176,6 +176,8 @@ html.kb-open .coach-pins { display: none; }
    centered empty state jump while the keyboard animated). */
 .chat-suggestions { transition: opacity 0.2s ease; }
 html.kb-open .chat-suggestions { opacity: 0; pointer-events: none; }
+.empty-hero { transform: translateY(var(--hero-shift, 0px)); transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1); }
+html.kb-open .empty-hero { transform: none; }
 /* The expanded week: a drawer that slides down over the feed while everything else dims. */
 .week-dim { position: fixed; inset: 0; z-index: 45; background: rgba(0, 0, 0, 0.45);
   opacity: 0; pointer-events: none; transition: opacity 0.22s ease; }

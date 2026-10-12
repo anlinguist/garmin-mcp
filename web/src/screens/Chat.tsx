@@ -1,6 +1,6 @@
 import { useSheetDrag } from '@/hooks/useSheetDrag'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Menu, Target, X } from 'lucide-react'
+import { MessagesSquare, Target, X } from 'lucide-react'
 import { Avatar } from '@/components/Avatar'
 import { MemorySheet } from '@/components/MemorySheet'
 import { RabbitLogo } from '@/components/RabbitLogo'
@@ -214,7 +214,7 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
           </span>
         </button>
         <Button variant="ghost" size="icon" aria-label="Chats" onClick={() => open('threads')}>
-          <Menu className="size-5" />
+          <MessagesSquare className="size-5" />
         </Button>
         <button className="rounded-full" aria-label="Settings" onClick={() => open('settings')}>
           <Avatar name={me.profile.name || me.user_id} picture={me.profile.picture} />

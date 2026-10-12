@@ -5,7 +5,8 @@
 // the page ourselves (fighting its keyboard scrolling breaks the layout).
 //
 // Keyboard detection compares the visual viewport with the tallest it has been (the
-// full screen), not window.innerHeight, which iOS Home Screen apps may shrink too.
+// full screen), not window.innerHeight: iOS Home Screen apps shrink innerHeight with the
+// keyboard too (observed: innerHeight 481 = visual height, full 894).
 // Sets html.kb-open so the composer drops its home-indicator padding.
 export function trackKeyboard(): void {
   const vv = window.visualViewport
@@ -21,10 +22,6 @@ export function trackKeyboard(): void {
       root.style.setProperty('--vv-h', `${vv.height}px`)
       root.style.setProperty('--vv-top', `${vv.offsetTop}px`)
       root.classList.toggle('kb-open', keyboard)
-      // TEMP diagnostics for the keyboard gap (removed once fixed).
-      const pad = document.querySelector('.composer-bar')
-      root.dataset.kbDebug = `vv ${Math.round(vv.height)} top ${Math.round(vv.offsetTop)} inner ${window.innerHeight} full ${Math.round(full)} kb ${keyboard ? 1 : 0} pad ${pad ? getComputedStyle(pad).paddingBottom : '?'}`
-      window.dispatchEvent(new Event('rabbit-kb-debug'))
     })
   }
   vv.addEventListener('resize', update)

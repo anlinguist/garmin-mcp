@@ -15,16 +15,6 @@ let n = 0
 
 export const ATTACH_INPUT_ID = 'rabbit-attach'
 
-// TEMP: keyboard-gap diagnostics, shown only while the keyboard is open.
-function KbDebug() {
-  const [text, setText] = useState(document.documentElement.dataset.kbDebug ?? '')
-  useEffect(() => {
-    const on = () => setText(document.documentElement.dataset.kbDebug ?? '')
-    window.addEventListener('rabbit-kb-debug', on)
-    return () => window.removeEventListener('rabbit-kb-debug', on)
-  }, [])
-  return <div className="kb-debug mt-1 text-center font-mono text-[9px] text-(--text-muted)">{text}</div>
-}
 
 export function Composer({ disabled, streaming, onSend, onStop, placeholder, draft }: {
   disabled: boolean
@@ -107,7 +97,7 @@ export function Composer({ disabled, streaming, onSend, onStop, placeholder, dra
 
   return (
     <div
-      className={cn('composer-bar relative z-40 shrink-0 border-t border-(--border) bg-(--bg) px-3 pb-[max(10px,env(safe-area-inset-bottom))] pt-2.5 transition-all duration-200',
+      className={cn('composer-bar relative z-40 shrink-0 border-t border-(--border) bg-(--bg) px-3 pb-[max(10px,env(safe-area-inset-bottom))] pt-2.5 transition-colors duration-200',
         dragging && 'border-accent bg-accent/5')}
       onDragEnter={(e) => { if (e.dataTransfer.types.includes('Files')) { dragDepth.current++; setDragging(true) } }}
       onDragLeave={() => { dragDepth.current = Math.max(0, dragDepth.current - 1); if (!dragDepth.current) setDragging(false) }}
@@ -195,7 +185,6 @@ export function Composer({ disabled, streaming, onSend, onStop, placeholder, dra
           </button>
         )}
       </div>
-      <KbDebug />
     </div>
   )
 }

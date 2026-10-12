@@ -10,8 +10,11 @@ export type StreamEvent =
   | { type: 'tool-call-error'; toolCallId: string; toolName: string; error: string }
   | { type: 'approval-request'; approvalCallId: string; toolName: string; params: Record<string, unknown>; summary: ApprovalSummary }
   | { type: 'approval-result'; approvalCallId: string; approved: boolean; reason: string | null }
+  | { type: 'chart'; toolCallId: string; spec: ChartSpec }
   | { type: 'usage'; promptTokens: number; completionTokens: number; totalTokens: number }
   | { type: 'result'; response: AgentResponse }
+
+import type { ChartSpec } from '@/components/chat/Chart'
 
 export type ApprovalSummary = {
   title: string; detail?: string

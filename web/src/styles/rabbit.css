@@ -42,3 +42,33 @@ html, body { overscroll-behavior: none; }
   width: 40px; height: 5px; border-radius: 999px; background: var(--border-strong);
   margin: 8px auto 0; flex-shrink: 0;
 }
+
+/* Charts (ported from CPM). Categorical order validated with the dataviz validator
+   against Rabbit's surfaces: light #fafaf8 and dark #162b20 (all checks pass; light
+   contrast WARN is relieved by tooltips, legend and the "Show data" table). A single
+   series uses --accent. */
+:root {
+  --chart-1: #2a78d6; --chart-2: #eb6834; --chart-3: #1baf7a; --chart-4: #eda100;
+  --chart-5: #e87ba4; --chart-6: #008300; --chart-7: #4a3aa7; --chart-8: #e34948;
+  --chart-grid: rgba(10, 15, 12, 0.08);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --chart-1: #3987e5; --chart-2: #d95926; --chart-3: #199e70; --chart-4: #c98500;
+    --chart-5: #d55181; --chart-6: #008300; --chart-7: #9085e9; --chart-8: #e66767;
+    --chart-grid: rgba(143, 188, 143, 0.12);
+  }
+}
+:root.dark {
+  --chart-1: #3987e5; --chart-2: #d95926; --chart-3: #199e70; --chart-4: #c98500;
+  --chart-5: #d55181; --chart-6: #008300; --chart-7: #9085e9; --chart-8: #e66767;
+  --chart-grid: rgba(143, 188, 143, 0.12);
+}
+@keyframes cpm-bar-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes cpm-draw { to { stroke-dashoffset: 0; } }
+@keyframes cpm-fade-in { from { opacity: 0; } to { opacity: var(--cpm-fade-to, 1); } }
+@keyframes cpm-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.cpm-bar { transform-box: fill-box; transform-origin: 50% 100%; animation: cpm-bar-grow 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+.cpm-line { stroke-dasharray: 1; stroke-dashoffset: 1; animation: cpm-draw 0.7s ease-out both; }
+.cpm-fade { animation: cpm-fade-in 0.5s ease-out both; }
+.cpm-rise { animation: cpm-rise 0.45s cubic-bezier(0.2, 0.7, 0.3, 1) both; }

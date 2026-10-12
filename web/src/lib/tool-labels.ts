@@ -36,6 +36,7 @@ export function toolLabel(toolName: string, params: Record<string, unknown>): st
   if (toolName === 'update_athlete_profile') return 'Noted something about you'
   if (toolName === 'save_plan') return 'Saved your plan'
   if (toolName === 'read_file') return 'Reopened your file'
+  if (toolName === 'render_chart') return 'Drawing a chart'
   if (toolName === 'save_goal') return params.replace_current ? 'Started a new goal' : 'Saved your goal'
   if (toolName === 'execute') {
     const method = String(params.method ?? '')

@@ -11,6 +11,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { getJSON } from '@/lib/api'
 import { attachTurn, sendChat, type ApprovalSummary, type StreamEvent } from '@/lib/agent-stream'
 import type { AttachmentMeta } from '@/lib/attachments'
+import type { ChartSpec } from '@/components/chat/Chart'
 
 export type ChatMessage = {
   kind: 'message'; id: string; role: 'user' | 'agent'; text: string; error?: boolean
@@ -27,12 +28,14 @@ export type Approval = {
   kind: 'approval'; id: string; turnId: string | null; summary: ApprovalSummary
   status: 'pending' | 'approved' | 'declined'; reason?: string | null
 }
-export type ChatItem = ChatMessage | ToolCall | ThreadLink | Approval
+export type ChartItem = { kind: 'chart'; id: string; spec: ChartSpec }
+export type ChatItem = ChatMessage | ToolCall | ThreadLink | Approval | ChartItem
 export type Status = 'loading' | 'idle' | 'streaming'
 
 type Part =
   | { type: 'text'; text: string }
   | { type: 'thread_link'; thread_id: string; from_turn: string | null }
+  | { type: 'chart'; spec: ChartSpec }
   | { type: 'tool_call'; toolCallId: string; toolName: string; params: Record<string, unknown>; result?: unknown; error?: string
       approval?: { summary: ApprovalSummary; approved: boolean; reason: string | null } }
 type StoredTurn = {
@@ -53,7 +56,9 @@ function turnsToItems(turns: StoredTurn[]): ChatItem[] {
     }
     let first = true
     t.parts.forEach((p, i) => {
-      if (p.type === 'thread_link') {
+      if (p.type === 'chart') {
+        items.push({ kind: 'chart', id: `${t.id}-${i}`, spec: p.spec })
+      } else if (p.type === 'thread_link') {
         items.push({ kind: 'link', id: `${t.id}-${i}`, threadId: p.thread_id, fromTurn: p.from_turn, ts: t.ts })
       } else if (p.type === 'text') {
         items.push({ kind: 'message', id: `${t.id}-${i}`, role: 'agent', text: p.text, ts: t.ts,
@@ -114,6 +119,12 @@ export function useCoach(threadId: string | null, activeTurn: string | null,
       case 'tool-call-error':
         setItems((prev) => prev.map((it) => (it.id === e.toolCallId && it.kind === 'tool'
           ? { ...it, status: 'error', error: e.error } : it)))
+        break
+      case 'chart':
+        openMsg.current = null
+        // The chart replaces the tool card that announced it.
+        setItems((prev) => [...prev.filter((it) => it.id !== e.toolCallId),
+          { kind: 'chart', id: `c-${e.toolCallId}`, spec: e.spec }])
         break
       case 'approval-request':
         openMsg.current = null

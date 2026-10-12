@@ -16,8 +16,9 @@ import {
   createThread, deleteThread, goalCountdown, listThreads, putSettings,
   type Goal, type Me, type Thread,
 } from '@/lib/api'
-import { useCoach, type QueuedSend, type Approval, type ChatItem, type ChatMessage, type ThreadLink, type ToolCall } from '@/hooks/useCoach'
+import { useCoach, type QueuedSend, type ChartItem, type Approval, type ChatItem, type ChatMessage, type ThreadLink, type ToolCall } from '@/hooks/useCoach'
 import { ApprovalCard } from '@/components/chat/ApprovalCard'
+import { Chart } from '@/components/chat/Chart'
 
 const COACH_SUGGESTIONS = [
   'How did my training go this week?',
@@ -32,6 +33,7 @@ type Row =
   | { kind: 'group'; items: ToolCall[] }
   | { kind: 'link'; item: ThreadLink }
   | { kind: 'approval'; item: Approval }
+  | { kind: 'chart'; item: ChartItem }
 
 // Consecutive tool calls collapse into one group (Dolly's ToolCallGroup); a
 // speaker label shows only when the speaker changes.
@@ -51,6 +53,7 @@ function toRows(items: ChatItem[], hideTools = false): Row[] {
     }
     if (it.kind === 'link') { rows.push({ kind: 'link', item: it }); lastSpeaker = null; continue }
     if (it.kind === 'approval') { rows.push({ kind: 'approval', item: it }); lastSpeaker = 'agent'; continue }
+    if (it.kind === 'chart') { rows.push({ kind: 'chart', item: it }); lastSpeaker = 'agent'; continue }
     rows.push({ kind: 'message', item: it, showLabel: lastSpeaker !== it.role && !it.label })
     lastSpeaker = it.role
   }
@@ -286,6 +289,13 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
               if (r.kind === 'link') {
                 if (!byId[r.item.threadId]) return null // chat was deleted
                 return <ThreadLinkCard key={r.item.id} thread={byId[r.item.threadId]} onOpen={() => openThread(r.item.threadId)} />
+              }
+              if (r.kind === 'chart') {
+                return (
+                  <div key={r.item.id} className="w-full max-w-[92%] [&>figure]:my-0 [&>figure]:bg-background">
+                    <Chart spec={r.item.spec} />
+                  </div>
+                )
               }
               if (r.kind === 'approval') {
                 return <ApprovalCard key={r.item.id} item={r.item}

@@ -66,6 +66,21 @@ READ_FILE_DESC = (
     "instead of asking the athlete to repeat themselves."
 )
 
+CHART_UNITS = ["none", "count", "seconds", "minutes", "hours", "miles", "km", "yards", "meters",
+               "bpm", "watts", "percent"]
+
+CHART_DESC = (
+    "Show the athlete a chart in the chat (it renders as an interactive graph with a data table). "
+    "Use it whenever they ask to graph, chart, plot or visualize something, or when a trend is "
+    "clearer as a picture than as text. Forms: bar (compare categories, e.g. per-day or per-week "
+    "totals), stackedBar (composition, e.g. weekly time split by sport), line/area (change over "
+    "time, e.g. HRV, resting HR, weekly volume), donut (share of a whole), stat (one to four "
+    "headline numbers). One unit per chart: never mix measures with different units (make two "
+    "charts instead). Only plot numbers you actually retrieved with tools; convert to the "
+    "athlete's preferred units first. Keep labels short (e.g. 'Oct 6', 'Wk 3'). After calling "
+    "it, add a sentence or two on what the chart shows, but don't repeat every number."
+)
+
 AGENT_TOOLS: list[dict] = [
     {
         "name": "recent_activities",
@@ -147,6 +162,26 @@ AGENT_TOOLS: list[dict] = [
                 "attachment_ids": {"type": "array", "items": {"type": "string"}, "maxItems": 10},
             },
             "required": ["summary"],
+        },
+    },
+    {
+        "name": "render_chart",
+        "description": CHART_DESC,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "type": {"type": "string", "enum": ["bar", "stackedBar", "line", "area", "donut", "stat"]},
+                "title": {"type": "string", "maxLength": 120},
+                "x": {"type": "array", "items": {"type": "string"},
+                      "description": "Category or time labels (bar/stackedBar/line/area). Omit for donut/stat."},
+                "series": {"type": "array", "minItems": 1, "items": {
+                    "type": "object",
+                    "properties": {"name": {"type": "string"},
+                                   "data": {"type": "array", "items": {"type": "number"}}},
+                    "required": ["data"]}},
+                "unit": {"type": "string", "enum": CHART_UNITS},
+            },
+            "required": ["type", "series"],
         },
     },
     {

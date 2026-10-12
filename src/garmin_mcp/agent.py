@@ -70,6 +70,8 @@ race and the rough training phase) and your coach notes. Scope advice to that go
 update_athlete_profile for stable facts about the athlete, update_notes for what you learn \
 during this block. Only save what they told you or confirmed, and say in one short line what \
 you saved so they can correct it.
+- You can show charts with render_chart. When they ask to graph or chart something, make the \
+chart; never say you can't draw or fall back to text art.
 - Never say you saved, updated or noted something unless you called the tool that does it in \
 this turn. If you decide not to save something, don't claim you did.
 - Uploaded files are only visible in the message they came with. When you need details from \
@@ -155,6 +157,52 @@ class _TurnState:
             self.parts[-1]["text"] += t
         else:
             self.parts.append({"type": "text", "text": t})
+
+
+_CHART_TYPES = {"bar", "stackedBar", "line", "area", "donut", "stat"}
+MAX_CHART_SERIES = 8   # the categorical palette has 8 validated hues
+MAX_CHART_POINTS = 366
+
+
+def _num(v: Any) -> float:
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return 0.0
+    return f if f == f and abs(f) != float("inf") else 0.0
+
+
+def normalize_chart(args: Any) -> dict[str, Any]:
+    """Port of CPM's normalizeChart: the spec is model-authored, so coerce and clamp it into
+    something the renderer can always draw. Never raises."""
+    from .toolspec import CHART_UNITS
+    a = args if isinstance(args, dict) else {}
+    ctype = a.get("type") if a.get("type") in _CHART_TYPES else "bar"
+    series = []
+    for s in a.get("series") or []:
+        if not isinstance(s, dict) or not isinstance(s.get("data"), list):
+            continue
+        data = [_num(v) for v in s["data"][:MAX_CHART_POINTS]]
+        if data:
+            name = str(s.get("name") or "").strip()[:60]
+            series.append({"name": name, "data": data} if name else {"data": data})
+    series = series[:MAX_CHART_SERIES] or [{"data": [0.0]}]
+    n = max(len(s["data"]) for s in series)
+    x = a.get("x")
+    labels = ([str(v)[:40] for v in x[:n]] if isinstance(x, list) and len(x) >= n else None)
+    spec: dict[str, Any] = {"type": ctype, "series": series,
+                            "unit": a.get("unit") if a.get("unit") in CHART_UNITS else "none"}
+    title = str(a.get("title") or "").strip()[:120]
+    if title:
+        spec["title"] = title
+    if labels and ctype not in ("donut", "stat"):
+        spec["x"] = labels
+    return spec
+
+
+@dataclass
+class _ChartResult:
+    spec: dict[str, Any]
 
 
 @dataclass
@@ -292,6 +340,8 @@ class Agent:
             return {"ok": True, "replaced_previous": bool(g and replace),
                     "goal": {k: goal.get(k) for k in
                              ("title", "event", "date", "distance", "target", "priorities")}}
+        if name == "render_chart":
+            return _ChartResult(normalize_chart(args))
         if name == "read_file":
             att_id = args.get("attachment_id")
             got = self.attachments.load(user_id, att_id) if isinstance(att_id, str) else None
@@ -513,6 +563,14 @@ class Agent:
                           "toolName": block.name, "error": msg})
                     results.append({"type": "tool_result", "tool_use_id": block.id,
                                     "content": msg, "is_error": True})
+                    continue
+                if isinstance(out, _ChartResult):
+                    # Charts render in the chat as their own part, between text parts.
+                    st.parts.remove(part)  # no tool card for a chart; the chart is the output
+                    st.parts.append({"type": "chart", "spec": out.spec})
+                    emit({"type": "chart", "toolCallId": block.id, "spec": out.spec})
+                    results.append({"type": "tool_result", "tool_use_id": block.id,
+                                    "content": "Chart shown to the athlete."})
                     continue
                 if isinstance(out, _FileResult):
                     part["result"] = {"file": out.meta["name"], "kind": out.meta["kind"]}

@@ -325,3 +325,37 @@ def test_text_after_tools_starts_new_paragraph(env) -> None:
     ])
     rec = go(agent, "friend", "x")
     assert rec["assistant"] == "Checking.\n\nDone."
+
+
+# ----------------------------------------------------------------- charts ----
+def test_normalize_chart_coerces_and_clamps() -> None:
+    from garmin_mcp.agent import normalize_chart
+    spec = normalize_chart({
+        "type": "bar", "title": "  Weekly minutes  ", "unit": "minutes",
+        "x": ["Mon", "Tue", "Wed"],
+        "series": [{"name": "Run", "data": [30, "45", None, "nan"]},  # junk becomes 0
+                   {"data": "not a list"}] + [{"data": [1]}] * 10,
+    })
+    assert spec["type"] == "bar" and spec["title"] == "Weekly minutes" and spec["unit"] == "minutes"
+    assert spec["series"][0] == {"name": "Run", "data": [30.0, 45.0, 0.0, 0.0]}
+    assert len(spec["series"]) == 8          # palette has 8 validated hues
+    assert "x" not in spec                   # 3 labels can't cover 4 points: drop, renderer numbers them
+    assert normalize_chart({"type": "pie!", "series": [], "unit": "furlongs"}) == {
+        "type": "bar", "series": [{"data": [0.0]}], "unit": "none"}
+    donut = normalize_chart({"type": "donut", "x": ["a"], "series": [{"name": "Swim", "data": [3]}]})
+    assert "x" not in donut
+
+
+def test_chart_renders_as_its_own_part(env) -> None:
+    agent, backend = env.agent([
+        (["Here's your week."], [tool_block("render_chart", {
+            "type": "bar", "title": "Minutes", "unit": "minutes", "x": ["Mon", "Tue"],
+            "series": [{"data": [30, 45]}]})], "tool_use"),
+        (["Tuesday was your biggest day."], [], "end_turn"),
+    ])
+    events, emit = collect()
+    rec = go(agent, "friend", "graph my week", emit)
+    chart = next(e for e in events if e["type"] == "chart")
+    assert chart["spec"]["x"] == ["Mon", "Tue"] and chart["spec"]["series"][0]["data"] == [30.0, 45.0]
+    assert [p["type"] for p in rec["parts"]] == ["text", "chart", "text"]  # no tool card for it
+    assert backend.calls[1][-1]["content"][0]["content"] == "Chart shown to the athlete."

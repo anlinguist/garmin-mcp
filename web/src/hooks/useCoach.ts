@@ -74,7 +74,14 @@ function turnsToItems(turns: StoredTurn[]): ChatItem[] {
   return items
 }
 
-export function useCoach(threadId: string | null, activeTurn: string | null) {
+export type QueuedSend = { threadId: string; text: string; attachments: AttachmentMeta[] }
+
+/** ``queued``: a message to send as soon as ``queued.threadId`` is open (used when a
+ *  message typed in the coach log becomes a new thread). */
+export function useCoach(threadId: string | null, activeTurn: string | null,
+  queued?: QueuedSend | null, onQueuedSent?: () => void) {
+  const queuedRef = useRef(queued)
+  queuedRef.current = queued
   const [items, setItems] = useState<ChatItem[]>([])
   const [status, setStatus] = useState<Status>('loading')
   const turnRef = useRef<{ id: string; seen: number } | null>(null)
@@ -181,6 +188,11 @@ export function useCoach(threadId: string | null, activeTurn: string | null) {
         await reattach()
       }
       first.current = false
+      const q = queuedRef.current
+      if (q && q.threadId === threadId) {
+        onQueuedSent?.()
+        await send(q.text, q.attachments)
+      }
     })()
   }, [threadId]) // eslint-disable-line react-hooks/exhaustive-deps
 

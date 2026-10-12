@@ -7,6 +7,7 @@ import { SettingsPanels } from '@/components/SettingsPanels'
 import { ThreadsSheet } from '@/components/ThreadsSheet'
 import { CoachHeader, DiscussButton, ThreadLinkCard } from '@/components/chat/CoachCards'
 import { ATTACH_INPUT_ID, Composer } from '@/components/chat/Composer'
+import type { AttachmentMeta } from '@/lib/attachments'
 import { MessageBubble } from '@/components/chat/MessageBubble'
 import { ToolCallCard, ToolCallGroup } from '@/components/chat/ToolCallCard'
 import { Button } from '@/components/ui/button'
@@ -14,7 +15,7 @@ import {
   createThread, deleteThread, goalCountdown, listThreads, putSettings,
   type Goal, type Me, type Thread,
 } from '@/lib/api'
-import { useCoach, type Approval, type ChatItem, type ChatMessage, type ThreadLink, type ToolCall } from '@/hooks/useCoach'
+import { useCoach, type QueuedSend, type Approval, type ChatItem, type ChatMessage, type ThreadLink, type ToolCall } from '@/hooks/useCoach'
 import { ApprovalCard } from '@/components/chat/ApprovalCard'
 
 const COACH_SUGGESTIONS = [
@@ -33,8 +34,9 @@ type Row =
 
 // Consecutive tool calls collapse into one group (Dolly's ToolCallGroup); a
 // speaker label shows only when the speaker changes.
-function toRows(items: ChatItem[]): Row[] {
+function toRows(items: ChatItem[], hideTools = false): Row[] {
   const rows: Row[] = []
+  if (hideTools) items = items.filter((it) => it.kind !== 'tool')
   let lastSpeaker: string | null = null
   for (let i = 0; i < items.length; i++) {
     const it = items[i]!
@@ -60,7 +62,9 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
   const [threads, setThreads] = useState<Thread[]>([])
   const [goal, setGoal] = useState<Goal | null>(me.goal)
   const [threadId, setThreadId] = useState<string | null>(null)
-  const { items, status, send, stop, decide, reload } = useCoach(threadId, me.chat.active_turn)
+  const [queued, setQueued] = useState<QueuedSend | null>(null)
+  const { items, status, send, stop, decide, reload } =
+    useCoach(threadId, me.chat.active_turn, queued, () => setQueued(null))
   const [sheet, setSheet] = useState<Sheet | null>(me.garmin.connected ? null : 'settings')
   const [closing, setClosing] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -69,7 +73,8 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
 
   const thread = threads.find((t) => t.id === threadId) ?? null
   const byId = useMemo(() => Object.fromEntries(threads.map((t) => [t.id, t])), [threads])
-  const rows = useMemo(() => toRows(items), [items])
+  // The coach log is a timeline: no lookup cards there (they stay in topic threads).
+  const rows = useMemo(() => toRows(items, thread?.kind === 'coach'), [items, thread?.kind])
   const last = items[items.length - 1]
   const waitingOnYou = items.some((it) => it.kind === 'approval' && it.status === 'pending')
   const thinking = status === 'streaming' && !waitingOnYou && !(last?.kind === 'message' && last.role === 'agent')
@@ -135,6 +140,25 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
   }
 
   const isCoach = thread?.kind === 'coach'
+
+  // The coach log stays a timeline: a message typed there starts a new topic thread.
+  // A brief or workout note from the last 18 hours comes along as context (like Discuss).
+  async function sendFromLog(text: string, attachments: AttachmentMeta[]) {
+    if (!thread) return
+    const cutoff = Date.now() / 1000 - 18 * 3600
+    const recent = [...items].reverse().find((it): it is ChatMessage =>
+      it.kind === 'message' && it.turnKind === 'proactive' && !!it.turnId && (it.ts ?? 0) > cutoff)
+    setBusy(true)
+    try {
+      const t = await createThread(recent ? { thread_id: thread.id, turn_id: recent.turnId! } : undefined)
+      setQueued({ threadId: t.id, text, attachments })
+      await refreshThreads(t.id)
+    } catch (e) {
+      window.alert((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
   const suggestions = isCoach ? COACH_SUGGESTIONS : TOPIC_SUGGESTIONS
   const countdown = goalCountdown(goal)
 
@@ -207,7 +231,7 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
             {suggestions.map((s) => (
               <button key={s} disabled={!me.chat.available}
                 className="w-full cursor-pointer rounded-(--radius) border border-border bg-background px-3.5 py-2.5 text-left text-[13px] text-foreground/80 transition-all hover:bg-secondary disabled:opacity-50"
-                onClick={() => void send(s)}>{s}</button>
+                onClick={() => void (isCoach ? sendFromLog(s, []) : send(s))}>{s}</button>
             ))}
           </div>
         </div>
@@ -247,12 +271,13 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
       )}
 
       <Composer
-        disabled={status !== 'idle' || !me.chat.available || !threadId}
+        disabled={status !== 'idle' || !me.chat.available || !threadId || busy}
         streaming={status === 'streaming'}
         onStop={() => void stop()}
-        onSend={(t, a) => void send(t, a)}
+        onSend={(t, a) => void (isCoach ? sendFromLog(t, a) : send(t, a))}
         draft={draft}
-        placeholder={!me.chat.available ? 'Chat isn’t configured yet' : waitingOnYou ? 'Approve or decline above…' : status === 'streaming' ? 'Rabbit is replying…' : 'Ask Rabbit…'}
+        placeholder={!me.chat.available ? 'Chat isn’t configured yet' : waitingOnYou ? 'Approve or decline above…'
+          : status === 'streaming' ? 'Rabbit is replying…' : isCoach ? 'Start a new chat…' : 'Ask Rabbit…'}
       />
 
       {sheet === 'threads' && (

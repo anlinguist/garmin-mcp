@@ -89,6 +89,7 @@ export type Goal = {
   id: string; title: string; event: string; date: string | null; distance: string
   target: string; priorities: string; notes: string; created: number; archived_at: number | null
   plan?: string; plan_files?: { id: string; name: string; kind: string; mime: string; size: number }[]
+  plan_start?: string; plan_weeks?: number
 }
 export type Thread = {
   id: string; kind: 'coach' | 'topic'; title: string; goal_id: string
@@ -127,3 +128,20 @@ export function goalCountdown(goal: Goal | null): string {
   const phase = weeks < 3 ? 'taper' : weeks < 8 ? 'peak' : weeks < 16 ? 'build' : 'base'
   return `${weeks} wks · ${phase}`
 }
+
+// "This week" in the coach log: the plan's sessions vs. what Garmin recorded.
+export type Sport = 'swim' | 'bike' | 'run' | 'brick' | 'strength' | 'rest' | 'other'
+export type DoneActivity = { id: number | null; name: string; sport: Sport; minutes: number; distance_km?: number | null }
+export type PlannedSession = {
+  sport: Sport; title: string; minutes: number | null; detail: string
+  status: 'done' | 'missed' | 'planned' | 'rest'; activity?: DoneActivity
+}
+export type WeekDay = { date: string; weekday: string; today: boolean; sessions: PlannedSession[]; extra: DoneActivity[] }
+export type PlanWeek = {
+  start: string; end: string; today: string
+  index: number | null; weeks: number | null; weeks_to_race: number | null; phase: string | null
+  plan_status: 'none' | 'ready' | 'error' | 'over_budget'; focus: string | null
+  garmin_error: string | null; days: WeekDay[]
+  totals: { planned_sessions: number; done_sessions: number; planned_minutes: number; done_minutes: number; extra_sessions: number }
+}
+export const getPlanWeek = () => getJSON<PlanWeek>('/api/plan/week')

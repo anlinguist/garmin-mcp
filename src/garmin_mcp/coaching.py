@@ -24,7 +24,7 @@ from __future__ import annotations
 import re
 import secrets
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from .appstore import AppStore
@@ -73,6 +73,31 @@ def training_phase(race: date, today: date) -> tuple[int, str]:
     if weeks < 16:
         return weeks, "build"
     return weeks, "base"
+
+
+def plan_week(goal: dict[str, Any] | None, today: date, offset: int = 0) -> dict[str, Any]:
+    """The plan week containing ``today`` (shifted by ``offset`` weeks).
+
+    Weeks follow the plan: they start on the weekday of ``plan_start``. Without a start
+    date but with a length and a race date, week 1 is counted back from race week.
+    Otherwise weeks are Monday-Sunday and unnumbered."""
+    goal = goal or {}
+    weeks = goal.get("plan_weeks") if isinstance(goal.get("plan_weeks"), int) else None
+    start: date | None = None
+    try:
+        if goal.get("plan_start"):
+            start = date.fromisoformat(goal["plan_start"])
+        elif weeks and goal.get("date"):
+            race = date.fromisoformat(goal["date"])
+            start = race - timedelta(days=race.weekday()) - timedelta(weeks=weeks - 1)
+    except ValueError:
+        start = None
+    anchor = start.weekday() if start else 0
+    day = today + timedelta(weeks=offset)
+    ws = day - timedelta(days=(day.weekday() - anchor) % 7)
+    index = (ws - start).days // 7 + 1 if start else None
+    return {"start": ws.isoformat(), "end": (ws + timedelta(days=6)).isoformat(),
+            "index": index, "weeks": weeks}
 
 
 class CoachStore:
@@ -181,18 +206,37 @@ class CoachStore:
             return dict(goal)
         return self._goals_doc(user_id).update(apply)
 
-    def set_plan(self, user_id: str, summary: str,
-                 files: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    def set_plan(self, user_id: str, summary: str | None,
+                 files: list[dict[str, Any]] | None = None, *,
+                 start_date: str | None = None, weeks: int | None = None) -> dict[str, Any]:
         """Store Rabbit's summary of the athlete's plan on the active goal, linking the
-        uploaded originals (attachment metadata) for the UI."""
+        uploaded originals (attachment metadata) for the UI. ``start_date`` (first day of
+        week 1) and ``weeks`` (length) let the app number the plan's weeks. A ``None``
+        summary keeps the current one."""
         g = self.active_goal(user_id)
         if g is None:
             raise CoachError("Save the goal first (save_goal), then the plan.")
-        summary = _clean_text(summary, _GOAL_TEXT["plan"], "plan")
+        if summary is not None:
+            summary = _clean_text(summary, _GOAL_TEXT["plan"], "plan")
+        elif not g.get("plan"):
+            raise CoachError("summary is required for the first plan")
+        if start_date is not None:
+            try:
+                date.fromisoformat(start_date)
+            except (TypeError, ValueError):
+                raise CoachError("start_date must be YYYY-MM-DD") from None
+        if weeks is not None and (not isinstance(weeks, int) or isinstance(weeks, bool)
+                                  or not 1 <= weeks <= 104):
+            raise CoachError("weeks must be a whole number from 1 to 104")
 
         def apply(d: dict[str, Any]) -> dict[str, Any]:
             goal = d["goals"][g["id"]]
-            goal["plan"] = summary
+            if summary is not None:
+                goal["plan"] = summary
+            if start_date is not None:
+                goal["plan_start"] = start_date
+            if weeks is not None:
+                goal["plan_weeks"] = weeks
             if files:
                 known = {f["id"] for f in goal.get("plan_files", [])}
                 goal["plan_files"] = (goal.get("plan_files", []) +
@@ -405,6 +449,13 @@ class CoachStore:
                 if len(plan) > PLAN_CONTEXT_CHARS:
                     plan = plan[:PLAN_CONTEXT_CHARS] + " ...[truncated]"
                 lines.append(f"Their training plan (your summary of what they shared): {plan}")
+                pw = plan_week(g, now.date())
+                if pw["index"] is not None:
+                    lines.append(f"This is week {pw['index']}" + (f" of {pw['weeks']}" if pw["weeks"] else "")
+                                 + f" of the plan ({pw['start']} to {pw['end']}).")
+                else:
+                    lines.append("Plan start date and length aren't saved yet; when you know them, "
+                                 "pass start_date and weeks to save_plan so the app can number weeks.")
                 files = ", ".join(f"{f['name']} (id {f['id']})" for f in g.get("plan_files", []))
                 if files:
                     lines.append(f"Plan files (reopen with read_file for details): {files}")

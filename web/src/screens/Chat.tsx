@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MessagesSquare, Target, X } from 'lucide-react'
 import { Avatar } from '@/components/Avatar'
 import { MemorySheet } from '@/components/MemorySheet'
+import { PlanSheet } from '@/components/PlanSheet'
+import { PlanPins } from '@/components/chat/PlanPins'
 import { RabbitLogo } from '@/components/RabbitLogo'
 import { SettingsPanels } from '@/components/SettingsPanels'
 import { ThreadsSheet } from '@/components/ThreadsSheet'
@@ -13,8 +15,8 @@ import { MessageBubble } from '@/components/chat/MessageBubble'
 import { ToolCallCard, ToolCallGroup } from '@/components/chat/ToolCallCard'
 import { Button } from '@/components/ui/button'
 import {
-  createThread, deleteThread, goalCountdown, listThreads, putSettings,
-  type Goal, type Me, type Thread,
+  createThread, deleteThread, getPlanWeek, goalCountdown, listThreads, putSettings,
+  type Goal, type Me, type PlanWeek, type Thread, type WeekDay,
 } from '@/lib/api'
 import { useCoach, type QueuedSend, type ChartItem, type Approval, type ChatItem, type ChatMessage, type ThreadLink, type ToolCall } from '@/hooks/useCoach'
 import { ApprovalCard } from '@/components/chat/ApprovalCard'
@@ -63,7 +65,7 @@ function toRows(items: ChatItem[], hideTools = false): Row[] {
   return rows
 }
 
-type Sheet = 'settings' | 'threads' | 'memory'
+type Sheet = 'settings' | 'threads' | 'memory' | 'plan'
 
 export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
   const [threads, setThreads] = useState<Thread[]>([])
@@ -183,6 +185,28 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
 
   const isCoach = !pending && thread?.kind === 'coach'
 
+  // Pinned plan + "This week" cards in the coach log. Refreshed when the log opens, after
+  // each reply (a plan may have changed) and when the app comes back to the foreground.
+  const [week, setWeek] = useState<PlanWeek | null>(null)
+  const [weekLoading, setWeekLoading] = useState(false)
+  const showPins = isCoach && !!goal
+  const loadWeek = useCallback(() => {
+    setWeekLoading(true)
+    getPlanWeek().then(setWeek, () => {}).finally(() => setWeekLoading(false))
+  }, [])
+  useEffect(() => {
+    if (!showPins || status !== 'idle') return
+    loadWeek()
+    const onVis = () => { if (document.visibilityState === 'visible') loadWeek() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [showPins, status, goal?.plan, loadWeek])
+  const askDay = (d: WeekDay) => {
+    const when = d.today ? 'today' : new Date(`${d.date}T12:00:00`).toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })
+    const what = d.sessions.filter((x) => x.status !== 'rest').map((x) => x.title).join(', ')
+    tellRabbit(`About ${when}${what ? ` (${what})` : ''}: `)
+  }
+
   const press = useLongPress((el) => {
     const id = el.dataset.msgId
     const item = items.find((it): it is ChatMessage => it.kind === 'message' && it.id === id)
@@ -249,6 +273,11 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
           <Target className="size-4 shrink-0" />
           Tell Rabbit what you're training for so briefs and feedback fit your plan.
         </button>
+      )}
+
+      {showPins && goal && (
+        <PlanPins goal={goal} week={week} loading={weekLoading}
+          onOpenPlan={() => open('plan')} onAskDay={askDay} />
       )}
 
       {pending ? (
@@ -391,6 +420,12 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
           onChanged={() => { onChange(); void refreshThreads() }}
           onTell={tellRabbit}
           onUploadPlan={() => tellRabbit("Here's my updated training plan.")} />
+      )}
+      {sheet === 'plan' && goal && (
+        <PlanSheet goal={goal} week={week} closing={closing} onClose={close} onDismissed={dismissNow}
+          onAsk={() => tellRabbit('About my plan: ')}
+          onUploadPlan={() => tellRabbit("Here's my updated training plan.")}
+          onEdit={() => open('memory')} />
       )}
       {sheet === 'settings' && (
         <div className={`modal-overlay ${closing ? 'modal-overlay--exit' : ''}`} onClick={close}>

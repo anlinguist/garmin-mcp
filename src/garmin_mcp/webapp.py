@@ -32,6 +32,7 @@ from .tokens import TokenStore, TokenStoreError
 from .webauth import WebAuth
 from .webchat import ChatRunner, Turn, TurnBusy
 from .webpush import WebPush, parse_subscription
+from .weekplan import WeekPlanner
 
 logger = logging.getLogger(__name__)
 
@@ -484,6 +485,13 @@ def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
                              "turns": [{k: t.get(k) for k in keys if k in t} for t in page],
                              "has_more": len(turns) > len(page)})
 
+    planner = WeekPlanner(chat.agent) if chat is not None else None
+
+    async def plan_week_get(request: Request, user_id: str) -> Response:
+        if planner is None:
+            return _err(503, "Chat isn't configured on this server.")
+        return JSONResponse(await planner.week(user_id))
+
     # ------------------------------------------------------ goal / athlete --
     async def goals_get(request: Request, user_id: str) -> Response:
         if chat is None:
@@ -592,6 +600,7 @@ def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
         Route("/app/api/goals/{goal_id}", _api(goal_update, mutating=True), methods=["PATCH"]),
         Route("/app/api/goals/{goal_id}/archive", _api(goal_archive, mutating=True),
               methods=["POST"]),
+        Route("/app/api/plan/week", _api(plan_week_get, mutating=False), methods=["GET"]),
         Route("/app/api/athlete", _api(athlete_put, mutating=True), methods=["PUT"]),
         Route("/app/api/garmin/login", _api(garmin_login, mutating=True), methods=["POST"]),
         Route("/app/api/garmin/login/{job_id}", _api(garmin_login_status, mutating=False),

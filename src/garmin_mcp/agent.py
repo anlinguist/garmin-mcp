@@ -362,10 +362,14 @@ class Agent:
                 meta = got[0]
                 files.append({k: meta[k] for k in ("id", "name", "kind", "mime", "size")})
             try:
-                goal = self.coach.set_plan(user_id, str(args.get("summary") or ""), files)
+                summary = args.get("summary")
+                goal = self.coach.set_plan(
+                    user_id, None if summary in (None, "") else str(summary), files,
+                    start_date=args.get("start_date"), weeks=args.get("weeks"))
             except CoachError as e:
                 raise GarminError(str(e)) from None
             return {"ok": True, "plan_chars": len(goal["plan"]),
+                    "start_date": goal.get("plan_start"), "weeks": goal.get("plan_weeks"),
                     "files": [f["name"] for f in goal.get("plan_files", [])]}
         raise GarminError(f"Unknown tool {name!r}.")
 
@@ -390,8 +394,18 @@ class Agent:
                        for k in _GOAL_FIELDS if k in args and str(args[k] or "") != str(g.get(k) or "")]
             return {"title": "Update your goal?", "changes": changes} if changes else None
         if name == "save_plan" and g.get("plan"):
-            return {"title": "Replace your plan summary?",
-                    "changes": [{"field": "Plan", "from": _snip(g["plan"]), "to": _snip(args.get("summary"))}]}
+            changes = []
+            if args.get("summary") and args["summary"] != g["plan"]:
+                changes.append({"field": "Plan", "from": _snip(g["plan"]), "to": _snip(args["summary"])})
+            # Filling in a start date or length for the first time isn't a change of plan.
+            for key, field, label in (("start_date", "plan_start", "Plan start"),
+                                      ("weeks", "plan_weeks", "Plan length (weeks)")):
+                if args.get(key) is not None and g.get(field) is not None and args[key] != g[field]:
+                    changes.append({"field": label, "from": str(g[field]), "to": str(args[key])})
+            if not changes:
+                return None
+            return {"title": "Replace your plan summary?" if changes[0]["field"] == "Plan"
+                    else "Change your plan dates?", "changes": changes}
         return None
 
     # --------------------------------------------------------------- turn --

@@ -55,7 +55,10 @@ PLAN_DESC = (
     "then each week or phase with dates, weekly hours, key sessions and long-session targets, "
     "recovery weeks and races. Under 12000 characters. Pass attachment_ids of the plan files "
     "(shown as [Attached this turn: ...]) so the originals stay linked; you can reopen them later "
-    "with read_file. Rewrites the whole summary; include earlier content you're keeping."
+    "with read_file. Rewrites the whole summary; include earlier content you're keeping. Also pass "
+    "start_date (the first day of week 1, YYYY-MM-DD) and weeks (the plan's length) whenever you "
+    "know them; the app uses them to number weeks and show this week's sessions. To set only "
+    "those, omit summary and the current summary is kept."
 )
 
 READ_FILE_DESC = (
@@ -160,8 +163,9 @@ AGENT_TOOLS: list[dict] = [
             "properties": {
                 "summary": {"type": "string", "maxLength": 12000},
                 "attachment_ids": {"type": "array", "items": {"type": "string"}, "maxItems": 10},
+                "start_date": {"type": "string", "description": "First day of week 1, YYYY-MM-DD"},
+                "weeks": {"type": "integer", "minimum": 1, "maximum": 104},
             },
-            "required": ["summary"],
         },
     },
     {

@@ -127,6 +127,15 @@ class GarminService:
             "sport_filter": activity_type, "count": len(acts), "activities": acts,
         }
 
+    def activities_between(self, user_id: str, start: date, end: date) -> list[dict[str, Any]]:
+        """Compact activities from ``start`` to ``end`` inclusive (cached like any read)."""
+        info = self.registry.get("get_activities_by_date")
+        if info is None or info.access is not Access.READ:
+            raise GarminError("get_activities_by_date unavailable in this garminconnect version")
+        kwargs = {"startdate": start.isoformat(), "enddate": end.isoformat()}
+        raw = self._cached_call(user_id, info.name, info.fn, kwargs) or []
+        return [compact_activity(a) for a in raw if isinstance(a, dict)]
+
 
 # ------------------------------------------------------------ compaction ---
 def _round(v: Any, n: int = 1) -> Any:

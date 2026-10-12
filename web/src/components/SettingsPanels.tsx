@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Bell, LogOut, Radio, Target, Watch } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { CoachingSettings } from '@/components/CoachingSettings'
 import { ConnectGarmin } from '@/components/ConnectGarmin'
 import { goalCountdown, postJSON, postStream, signOut, type Goal, type Me } from '@/lib/api'
-import { enablePush, isStandalone, pushSupported, sendTestPush } from '@/lib/push'
+import { disablePush, enablePush, isStandalone, pushSupported, sendTestPush, thisDeviceSubscribed } from '@/lib/push'
 
 // Settings sheet content: Garmin connection, notifications, device checks, account.
 export function SettingsPanels({ me, goal, onEditGoal, onChange, onDevDone }: {
@@ -15,6 +15,14 @@ export function SettingsPanels({ me, goal, onEditGoal, onChange, onDevDone }: {
   onDevDone: () => void
 }) {
   const [pushMsg, setPushMsg] = useState<string | null>(null)
+  const [here, setHere] = useState<boolean | null>(null) // this device subscribed?
+  useEffect(() => { void thisDeviceSubscribed().then(setHere) }, [me.push.subscriptions])
+
+  async function onDisablePush() {
+    setBusy(true)
+    try { await disablePush(); setHere(false); setPushMsg('Notifications off on this device.'); onChange() }
+    catch (e) { setPushMsg((e as Error).message) } finally { setBusy(false) }
+  }
   const [busy, setBusy] = useState(false)
   const [ticks, setTicks] = useState<string[]>([])
 
@@ -29,6 +37,7 @@ export function SettingsPanels({ me, goal, onEditGoal, onChange, onDevDone }: {
     setBusy(true)
     try {
       const n = await enablePush(me.push.public_key)
+      setHere(true)
       setPushMsg(`Notifications on (${n} device${n === 1 ? '' : 's'}).`)
       onChange()
     } catch (e) {
@@ -121,14 +130,18 @@ export function SettingsPanels({ me, goal, onEditGoal, onChange, onDevDone }: {
               <p className="text-sm text-(--text-secondary)">
                 {!me.push.available ? 'Not configured on the server.'
                   : !pushSupported() ? (isStandalone() ? 'Not supported on this device.' : 'Open Rabbit from your Home Screen to turn these on.')
-                  : me.push.subscriptions ? `On for ${me.push.subscriptions} device(s).` : 'Off.'}
+                  : here ? `On for this device${me.push.subscriptions > 1 ? ` (and ${me.push.subscriptions - 1} other)` : ''}.`
+                  : me.push.subscriptions ? `Off on this device (on for ${me.push.subscriptions} other).` : 'Off.'}
               </p>
             </div>
           </div>
           {me.push.available && pushSupported() && (
             <div className="flex gap-2">
-              <Button variant="primary" disabled={busy} onClick={() => void onEnablePush()}>Turn on notifications</Button>
+              {here === false && (
+                <Button variant="primary" disabled={busy} onClick={() => void onEnablePush()}>Turn on notifications</Button>
+              )}
               <Button disabled={busy || !me.push.subscriptions} onClick={() => void onTestPush()}>Send test</Button>
+              {here && <Button variant="ghost" disabled={busy} onClick={() => void onDisablePush()}>Turn off</Button>}
             </div>
           )}
           {pushMsg && <p className="text-xs text-(--text-muted)">{pushMsg}</p>}

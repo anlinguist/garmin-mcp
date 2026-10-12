@@ -44,3 +44,26 @@ export async function enablePush(publicKey: string): Promise<number> {
 
 export type PushTestResult = { results: { host: string; status: number | null; removed: boolean }[] }
 export const sendTestPush = () => postJSON<PushTestResult>('/api/push/test')
+
+/** Is *this* device subscribed (permission granted and a live subscription)? */
+export async function thisDeviceSubscribed(): Promise<boolean> {
+  if (!pushSupported() || Notification.permission !== 'granted') return false
+  try {
+    const reg = await navigator.serviceWorker.ready
+    const sub = await reg.pushManager.getSubscription()
+    if (!sub) return false
+    // Keep the server in sync (idempotent), in case it dropped this subscription.
+    await postJSON('/api/push/subscribe', sub.toJSON()).catch(() => {})
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function disablePush(): Promise<void> {
+  const reg = await navigator.serviceWorker.ready
+  const sub = await reg.pushManager.getSubscription()
+  if (!sub) return
+  await postJSON('/api/push/unsubscribe', { endpoint: sub.endpoint }).catch(() => {})
+  await sub.unsubscribe()
+}

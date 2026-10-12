@@ -72,3 +72,49 @@ html, body { overscroll-behavior: none; }
 .cpm-line { stroke-dasharray: 1; stroke-dashoffset: 1; animation: cpm-draw 0.7s ease-out both; }
 .cpm-fade { animation: cpm-fade-in 0.5s ease-out both; }
 .cpm-rise { animation: cpm-rise 0.45s cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+
+/* Message context menu. On touch devices, long-press opens Rabbit's menu instead of
+   iOS text selection (desktop keeps normal selection); "Select text" offers selection. */
+@media (hover: none) {
+  .msg-press { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+}
+.selectable { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+.msg-press { transition: transform 0.15s ease; }
+.msg-press:active { transform: scale(0.985); }
+.msg-lifted {
+  position: relative; z-index: 60;
+  animation: msg-lift 0.32s cubic-bezier(0.2, 0.9, 0.25, 1.15) forwards;
+}
+@keyframes msg-lift {
+  0% { transform: scale(0.985); filter: drop-shadow(0 0 0 rgba(0, 0, 0, 0)); }
+  100% { transform: scale(1.035); filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.22)); }
+}
+.msg-menu-backdrop {
+  position: fixed; inset: 0; z-index: 55;
+  background: rgba(10, 15, 12, 0.18);
+  -webkit-backdrop-filter: blur(8px) saturate(120%); backdrop-filter: blur(8px) saturate(120%);
+  animation: modal-fade-in 0.2s ease-out both;
+}
+.msg-menu {
+  position: fixed; z-index: 61; min-width: 210px; overflow: hidden;
+  border-radius: 14px; border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-surface) 92%, transparent);
+  -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+  box-shadow: var(--shadow-lg);
+  animation: msg-menu-in 0.26s cubic-bezier(0.2, 0.9, 0.25, 1.1) both;
+}
+.msg-menu > button + button { border-top: 1px solid var(--border); }
+@keyframes msg-menu-in { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: scale(1); } }
+.rabbit-toast {
+  position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom)); z-index: 70;
+  transform: translateX(-50%); padding: 6px 14px; border-radius: 999px;
+  background: var(--text); color: var(--bg); font-size: 13px; box-shadow: var(--shadow-md); pointer-events: none;
+  animation: toast-in 1.6s ease both;
+}
+@keyframes toast-in {
+  0% { opacity: 0; transform: translate(-50%, 8px); } 12%, 80% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .msg-lifted, .msg-menu, .msg-menu-backdrop, .rabbit-toast { animation-duration: 0.01ms; }
+}

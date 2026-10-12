@@ -19,6 +19,8 @@ import {
 import { useCoach, type QueuedSend, type ChartItem, type Approval, type ChatItem, type ChatMessage, type ThreadLink, type ToolCall } from '@/hooks/useCoach'
 import { ApprovalCard } from '@/components/chat/ApprovalCard'
 import { Chart } from '@/components/chat/Chart'
+import { MessageMenu, type MenuTarget } from '@/components/chat/MessageMenu'
+import { useLongPress } from '@/hooks/useLongPress'
 
 const COACH_SUGGESTIONS = [
   'How did my training go this week?',
@@ -75,6 +77,9 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
   const [closing, setClosing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [draft, setDraft] = useState<{ text: string; n: number } | null>(null)
+  const [menu, setMenu] = useState<MenuTarget | null>(null)
+  const [toast, setToast] = useState<{ msg: string; n: number } | null>(null)
+  const showToast = (msg: string) => setToast((t) => ({ msg, n: (t?.n ?? 0) + 1 }))
   const feed = useRef<HTMLDivElement>(null)
 
   const thread = threads.find((t) => t.id === threadId) ?? null
@@ -160,6 +165,14 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
   }
 
   const isCoach = !pending && thread?.kind === 'coach'
+
+  const press = useLongPress((el) => {
+    const id = el.dataset.msgId
+    const item = items.find((it): it is ChatMessage => it.kind === 'message' && it.id === id)
+    if (!item || item.error) return
+    navigator.vibrate?.(10)
+    setMenu({ item, el, canDiscuss: isCoach && item.turnKind === 'proactive' && !!item.turnId })
+  })
 
   // The coach log stays a timeline: a message typed there starts a new topic thread.
   // A brief or workout note from the last 18 hours comes along as context (like Discuss).
@@ -309,7 +322,7 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
                 <div key={m.id} className={seed ? 'rounded-xl border border-dashed border-border p-2' : ''}>
                   {seed && <p className="mb-1 pl-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">From your coach log</p>}
                   <CoachHeader label={m.label} ts={m.ts} />
-                  <MessageBubble message={m} showLabel={r.showLabel} />
+                  <MessageBubble message={m} showLabel={r.showLabel} pressProps={press} />
                   {isCoach && m.turnKind === 'proactive' && m.turnId && thread && (
                     <DiscussButton busy={busy} onClick={() => newThread({ thread_id: thread.id, turn_id: m.turnId! }, m)} />
                   )}
@@ -335,6 +348,12 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
         placeholder={!me.chat.available ? 'Chat isn’t configured yet' : waitingOnYou ? 'Approve or decline above…'
           : status === 'streaming' ? 'Rabbit is replying…' : isCoach ? 'Start a new chat…' : 'Ask Rabbit…'}
       />
+
+      {menu && (
+        <MessageMenu target={menu} onClose={() => setMenu(null)} onToast={showToast}
+          onDiscuss={() => { if (thread && menu.item.turnId) newThread({ thread_id: thread.id, turn_id: menu.item.turnId }, menu.item) }} />
+      )}
+      {toast && <div key={toast.n} className="rabbit-toast" role="status">{toast.msg}</div>}
 
       {sheet === 'threads' && (
         <ThreadsSheet goal={goal} threads={threads} activeId={threadId} closing={closing} onDismissed={dismissNow}

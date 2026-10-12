@@ -10,9 +10,11 @@ import { attachmentUrl, formatFileSize } from '@/lib/attachments'
 
 const REMARK_PLUGINS = [remarkGfm]
 
-export const MessageBubble = memo(function MessageBubble({ message, showLabel }: {
+export const MessageBubble = memo(function MessageBubble({ message, showLabel, pressProps }: {
   message: ChatMessage
   showLabel: boolean
+  /** long-press / right-click handlers for the context menu (attached to the bubble) */
+  pressProps?: React.HTMLAttributes<HTMLDivElement>
 }) {
   const isUser = message.role === 'user'
   return (
@@ -45,8 +47,8 @@ export const MessageBubble = memo(function MessageBubble({ message, showLabel }:
           ))}
         </div>
       )}
-      {message.text && <div className={cn(
-        'relative min-w-0 max-w-[85%] overflow-hidden break-words rounded-xl px-3.5 py-2.5 text-[14px] leading-relaxed shadow-sm',
+      {message.text && <div data-msg-id={message.id} {...pressProps} className={cn(
+        'msg-press relative min-w-0 max-w-[85%] overflow-hidden break-words rounded-xl px-3.5 py-2.5 text-[14px] leading-relaxed shadow-sm',
         isUser
           ? 'rounded-tr-sm border border-black/10 bg-[var(--msg-user-bg)] text-[var(--msg-user-text)]'
           : message.error

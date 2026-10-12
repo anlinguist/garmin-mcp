@@ -40,6 +40,7 @@ html, body { overflow: hidden; }
 }
 
 .rabbit-logo { color: var(--brand); }
+.logo-tile .rabbit-logo { color: var(--bg); } /* cream mark on the brand tile */
 
 /* "Thinking" state: a small hop, the counterpart to Dolly's head tilt. */
 @keyframes rabbit-hop {

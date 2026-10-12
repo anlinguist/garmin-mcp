@@ -260,7 +260,7 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
         <button className="flex min-w-0 flex-1 items-center gap-2.5 text-left" aria-label="Coach log"
           onClick={() => { if (coachId) openThread(coachId) }}>
           {/* App-icon tile, like the Home Screen icon (hops while Rabbit is replying) */}
-          <span className="flex size-[38px] shrink-0 items-center justify-center rounded-[11px] bg-(--brand) text-(--bg) shadow-sm">
+          <span className="logo-tile flex size-[38px] shrink-0 items-center justify-center rounded-[11px] bg-(--brand) shadow-sm">
             <RabbitLogo size={32} thinking={status === 'streaming'} />
           </span>
           <span className="min-w-0">

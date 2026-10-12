@@ -155,9 +155,17 @@ Guardrails:
 
 - One login in flight server-wide (global lock). Garmin rate-limits per IP and
   every user shares the VM's IP.
-- Per-user cooldown of 15 minutes after a failed login; global cooldown of 60
-  minutes after a 429 or `CloudflareBlocked`. The UI shows a wait time instead
-  of a retry button.
+- Escalating per-user cooldown, by failure type (decided 2026-10-11):
+  - Wrong email or password (Garmin rejected the credentials): 1 min, then 5, 15, 60 min.
+    The ladder resets on success or after 24 h with no failures.
+  - Garmin 429 / `CloudflareBlocked`: a **global** cooldown (shared IP), 60 min doubling to
+    a 24 h cap, honoring `Retry-After` if Garmin sends one. Reports show 429s that look
+    account-level and last 48 h+ after repeated attempts, so the UI says "Garmin is
+    rate-limiting logins; try again after <time>" and offers no retry button.
+  - Wrong MFA code doesn't start a new login: up to 3 tries on the same handle.
+- Dev mode: `RABBIT_FAKE_GARMIN=1` (localhost/dev only) swaps in a fake provider that
+  scripts success, MFA, wrong password and 429, so the UI and cooldowns can be exercised
+  without real Garmin logins. Real logins happen once, deliberately.
 - The password only ever appears in the POST body. It is held in memory for the
   single attempt, then dropped, and never logged or echoed in errors (reuse
   `logs.redact`).

@@ -1,5 +1,6 @@
 // Ported from Dolly's ConversationList (web-mcp): same rows, relative times and delete
 // confirmation; the goal's pinned coach log sits on top. No virtualization needed at this size.
+import { useSheetDrag } from '@/hooks/useSheetDrag'
 import { useState } from 'react'
 import { MessageSquarePlus, Pin, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -23,9 +24,11 @@ export function ThreadsSheet({ goal, threads, activeId, onSelect, onNew, onDelet
   onEditGoal: () => void; onClose: () => void; closing: boolean
 }) {
   const [deleteTarget, setDeleteTarget] = useState<Thread | null>(null)
+  const drag = useSheetDrag(onClose)
   return (
     <div className={`modal-overlay ${closing ? 'modal-overlay--exit' : ''}`} onClick={onClose}>
-      <div className={`modal ${closing ? 'modal--exit' : ''}`} onClick={(e) => e.stopPropagation()}>
+      <div className={`modal ${closing ? 'modal--exit' : ''}`} onClick={(e) => e.stopPropagation()} {...drag}>
+        <div className="sheet-handle" />
         <div className="modal-header">
           <button className="min-w-0 text-left" onClick={onEditGoal}>
             <h2 className="modal-title truncate">{goal?.title ?? 'No goal yet'}</h2>
@@ -38,7 +41,7 @@ export function ThreadsSheet({ goal, threads, activeId, onSelect, onNew, onDelet
             <button className="modal-close" aria-label="Close" onClick={onClose}><X className="size-4" /></button>
           </div>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto pb-[max(12px,env(safe-area-inset-bottom))]">
+        <div className="modal-body min-h-0 flex-1 overflow-y-auto pb-[max(12px,env(safe-area-inset-bottom))]">
           {threads.map((t) => (
             <div key={t.id} role="button" tabIndex={0} onClick={() => onSelect(t.id)}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(t.id) } }}

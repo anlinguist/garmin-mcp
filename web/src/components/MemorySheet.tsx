@@ -1,6 +1,7 @@
 // "What Rabbit knows": a readable view of the goal, plan, profile and coach notes that
 // Rabbit picked up in conversation. Nothing to fill in up front: you tell Rabbit, and fix
 // any section here (inline) or by asking Rabbit to change it.
+import { useSheetDrag } from '@/hooks/useSheetDrag'
 import { useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -60,6 +61,7 @@ export function MemorySheet({ goal, athlete, onChanged, onTell, onUploadPlan, on
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const [showFullPlan, setShowFullPlan] = useState(false)
+  const drag = useSheetDrag(onClose)
 
   async function save(fn: () => Promise<unknown>) {
     setBusy(true); setMsg(null)
@@ -76,7 +78,8 @@ export function MemorySheet({ goal, athlete, onChanged, onTell, onUploadPlan, on
 
   return (
     <div className={`modal-overlay ${closing ? 'modal-overlay--exit' : ''}`} onClick={onClose}>
-      <div className={`modal ${closing ? 'modal--exit' : ''}`} onClick={(e) => e.stopPropagation()}>
+      <div className={`modal ${closing ? 'modal--exit' : ''}`} onClick={(e) => e.stopPropagation()} {...drag}>
+        <div className="sheet-handle" />
         <div className="modal-header">
           <h2 className="modal-title">What Rabbit knows</h2>
           <button className="modal-close" aria-label="Close" onClick={onClose}><X className="size-4" /></button>

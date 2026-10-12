@@ -316,3 +316,12 @@ def test_chat_endpoint_streams_ndjson_and_saves_history(env, tmp_path, fernet_ke
                                     headers=hdrs)).json()["ok"]
             assert [t["kind"] for t in (await c.get("/app/api/threads")).json()["threads"]] == ["coach"]
     asyncio.run(go_())
+
+
+def test_text_after_tools_starts_new_paragraph(env) -> None:
+    agent, _ = env.agent([
+        (["Checking."], [tool_block("search", {"query": "sleep"})], "tool_use"),
+        (["Done."], [], "end_turn"),
+    ])
+    rec = go(agent, "friend", "x")
+    assert rec["assistant"] == "Checking.\n\nDone."

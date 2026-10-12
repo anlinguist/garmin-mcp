@@ -1,3 +1,4 @@
+import { useSheetDrag } from '@/hooks/useSheetDrag'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Menu, MessageSquarePlus, Target, X } from 'lucide-react'
 import { Avatar } from '@/components/Avatar'
@@ -117,6 +118,7 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
   }, [items, status])
 
   const open = (s: Sheet) => { setClosing(false); setSheet(s) }
+  const settingsDrag = useSheetDrag(() => { setSheet(null); setClosing(false) })
   const coachId = threads.find((t) => t.kind === 'coach')?.id ?? null
   // "Tell Rabbit…": go to the coach log with the composer prefilled.
   const tellRabbit = (text: string) => {
@@ -298,7 +300,8 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
       )}
       {sheet === 'settings' && (
         <div className={`modal-overlay ${closing ? 'modal-overlay--exit' : ''}`} onClick={close}>
-          <div className={`modal ${closing ? 'modal--exit' : ''}`} onClick={(e) => e.stopPropagation()}>
+          <div className={`modal ${closing ? 'modal--exit' : ''}`} onClick={(e) => e.stopPropagation()} {...settingsDrag}>
+            <div className="sheet-handle" />
             <div className="modal-header">
               <h2 className="modal-title">Settings</h2>
               <button className="modal-close" aria-label="Close" onClick={close}><X className="size-4" /></button>

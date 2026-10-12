@@ -35,9 +35,10 @@ NOTES_DESC = (
 )
 
 PROFILE_DESC = (
-    "Save durable facts about the athlete that hold across goals: experience, units, typical "
-    "weekly hours, usual training days, injuries/limitations, preferences, age. Only fields the "
-    "athlete told you or confirmed; pass just the fields that changed."
+    "Save durable facts about the athlete that hold across goals: experience, units (metric or "
+    "imperial), typical weekly hours, usual training days, injuries/limitations, preferences "
+    "(e.g. 'swim distances in yards', 'hates the treadmill'), age. Only fields the athlete told "
+    "you or confirmed; pass just the fields that changed."
 )
 
 GOAL_DESC = (
@@ -49,10 +50,20 @@ GOAL_DESC = (
 
 PLAN_DESC = (
     "Save your summary of the athlete's training plan on the active goal, after they upload or "
-    "describe it. Write a compact, week-by-week (or phase-by-phase) summary with dates where "
-    "known: key sessions, long-session targets, recovery weeks, races. Under 6000 characters. "
-    "Pass attachment_ids of the plan files they sent (shown as [Attached this turn: ...]) so the "
-    "originals stay linked. Rewrites the whole summary; include earlier content you're keeping."
+    "describe it. This summary is what you'll see in every later conversation, so make it "
+    "usable on its own: the typical week (which day has which session, and which are hard), "
+    "then each week or phase with dates, weekly hours, key sessions and long-session targets, "
+    "recovery weeks and races. Under 12000 characters. Pass attachment_ids of the plan files "
+    "(shown as [Attached this turn: ...]) so the originals stay linked; you can reopen them later "
+    "with read_file. Rewrites the whole summary; include earlier content you're keeping."
+)
+
+READ_FILE_DESC = (
+    "Reopen one of the athlete's uploaded files (their training plan PDF, a screenshot, a text "
+    "file) to read it again. Uploads are only visible in the message they were sent with; after "
+    "that you see placeholders like [pdf: plan.pdf, id at...] and plan files are listed with ids "
+    "in the context. Use this whenever you need details your notes or plan summary don't have, "
+    "instead of asking the athlete to repeat themselves."
 )
 
 AGENT_TOOLS: list[dict] = [
@@ -132,10 +143,19 @@ AGENT_TOOLS: list[dict] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "summary": {"type": "string", "maxLength": 6000},
+                "summary": {"type": "string", "maxLength": 12000},
                 "attachment_ids": {"type": "array", "items": {"type": "string"}, "maxItems": 10},
             },
             "required": ["summary"],
+        },
+    },
+    {
+        "name": "read_file",
+        "description": READ_FILE_DESC,
+        "input_schema": {
+            "type": "object",
+            "properties": {"attachment_id": {"type": "string", "description": "e.g. at1a2b3c..."}},
+            "required": ["attachment_id"],
         },
     },
     {

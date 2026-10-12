@@ -70,6 +70,11 @@ race and the rough training phase) and your coach notes. Scope advice to that go
 update_athlete_profile for stable facts about the athlete, update_notes for what you learn \
 during this block. Only save what they told you or confirmed, and say in one short line what \
 you saved so they can correct it.
+- Never say you saved, updated or noted something unless you called the tool that does it in \
+this turn. If you decide not to save something, don't claim you did.
+- Uploaded files are only visible in the message they came with. When you need details from \
+their plan or another upload (which days, a specific week), reopen it with read_file rather \
+than asking them to repeat it.
 - Onboarding happens in conversation, not forms. With no goal yet, warmly ask what they're \
 training for (race, date, target) and invite them to upload their plan as a PDF or screenshots. \
 Ask one or two things at a time and fill in the rest as it comes up.
@@ -152,6 +157,13 @@ class _TurnState:
             self.parts.append({"type": "text", "text": t})
 
 
+@dataclass
+class _FileResult:
+    """read_file's output: the original file goes back to the model as a document/image."""
+    meta: dict[str, Any]
+    blocks: list[dict[str, Any]]
+
+
 def _with_weekdays(out: dict[str, Any]) -> dict[str, Any]:
     """Add the weekday to each activity: models misjudge weekdays from bare dates.
     Agent-only; the MCP tool's output is unchanged."""
@@ -213,7 +225,8 @@ class Agent:
             user = t.get("user")
             if user:
                 for a in t.get("attachments") or []:  # older attachments: placeholders only
-                    user += f"\n[{a.get('kind', 'file')}: {a.get('name', 'attachment')}]"
+                    user += (f"\n[{a.get('kind', 'file')}: {a.get('name', 'attachment')}, "
+                             f"id {a.get('id', '?')}]")
                 msgs.append({"role": "user", "content": user})
             if t.get("assistant"):
                 if not msgs:  # the API needs a user message first
@@ -279,6 +292,14 @@ class Agent:
             return {"ok": True, "replaced_previous": bool(g and replace),
                     "goal": {k: goal.get(k) for k in
                              ("title", "event", "date", "distance", "target", "priorities")}}
+        if name == "read_file":
+            att_id = args.get("attachment_id")
+            got = self.attachments.load(user_id, att_id) if isinstance(att_id, str) else None
+            if got is None:  # only this user's own uploads
+                raise GarminError("File not found. Check the id in the context or placeholders.")
+            meta, _ = got
+            _, blocks = self.attachments.for_message(user_id, [att_id])
+            return _FileResult(meta, blocks)
         if name == "save_plan":
             ids = args.get("attachment_ids") or []
             if not isinstance(ids, list) or len(ids) > 10:
@@ -396,9 +417,17 @@ class Agent:
                     finish: Callable[..., dict[str, Any]],
                     approve: Approver | None) -> dict[str, Any]:
         for _ in range(MAX_ITERATIONS):
+            fresh = [True]
+
+            async def text_in(t: str) -> None:
+                # Text resuming after a tool round starts a new paragraph.
+                if fresh[0] and st.text and not "".join(st.text)[-1:].isspace():
+                    t = "\n\n" + t.lstrip()
+                fresh[0] = False
+                await on_text(t)
             try:
                 resp = await self._backend.turn(system=SYSTEM_PROMPT, tools=AGENT_TOOLS,
-                                                messages=messages, on_text=on_text)
+                                                messages=messages, on_text=text_in)
             except Exception as e:
                 log_event(logger, logging.ERROR, "agent_model_error", user_id=user_id,
                           error=type(e).__name__)
@@ -484,6 +513,13 @@ class Agent:
                           "toolName": block.name, "error": msg})
                     results.append({"type": "tool_result", "tool_use_id": block.id,
                                     "content": msg, "is_error": True})
+                    continue
+                if isinstance(out, _FileResult):
+                    part["result"] = {"file": out.meta["name"], "kind": out.meta["kind"]}
+                    emit({"type": "tool-call-result", "toolCallId": block.id,
+                          "toolName": block.name, "result": part["result"]})
+                    results.append({"type": "tool_result", "tool_use_id": block.id, "content": [
+                        {"type": "text", "text": f"Contents of {out.meta['name']}:"}, *out.blocks]})
                     continue
                 part["result"] = _clip(out, DISPLAY_RESULT_CHARS)
                 emit({"type": "tool-call-result", "toolCallId": block.id,

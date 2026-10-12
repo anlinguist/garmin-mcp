@@ -100,7 +100,7 @@ def test_attachment_reaches_model_once_and_stays_in_history(env, tmp_path) -> No
             await c.post("/app/api/chat", headers=HDRS, content=json.dumps(body).encode())
             await runner.wait_idle()
             ctx = backend.calls[1]
-            assert ctx[0]["content"] == "(see attached)\n[pdf: plan.pdf]"  # placeholder only
+            assert ctx[0]["content"] == f"(see attached)\n[pdf: plan.pdf, id {meta['id']}]"  # placeholder
             assert not any(isinstance(m["content"], list) for m in ctx[:-1])
             page = (await c.get(f"/app/api/threads/{thread}/messages")).json()
             assert page["turns"][0]["attachments"] == [
@@ -143,3 +143,23 @@ def test_store_rejects_bad_ids(tmp_path, fernet_key) -> None:
     assert s.load("friend", "nope") is None
     with pytest.raises(AttachmentError):
         s.for_message("friend", ["at0000000000000000"])
+
+
+def test_read_file_reopens_own_uploads_only(env, tmp_path) -> None:
+    from tests.test_agent import go, tool_block
+    app, agent, backend, runner = _app(env, tmp_path)
+    mine = agent.attachments.save("friend", "plan.pdf", PDF)
+    theirs = agent.attachments.save("andrew", "x.pdf", PDF)
+    backend.steps = [
+        ([], [tool_block("read_file", {"attachment_id": mine["id"]}),
+              tool_block("read_file", {"attachment_id": theirs["id"]}, 1)], "tool_use"),
+        (["Tuesdays are intervals."], [], "end_turn"),
+    ]
+    events = []
+    go(agent, "friend", "which day is intervals?", events.append)
+    results = backend.calls[1][-1]["content"]
+    assert results[0]["content"][1]["type"] == "document"  # the original PDF went back
+    assert results[0]["content"][1]["source"]["media_type"] == "application/pdf"
+    assert results[1]["is_error"] and "not found" in results[1]["content"]
+    shown = next(e for e in events if e["type"] == "tool-call-result")["result"]
+    assert shown == {"file": "plan.pdf", "kind": "pdf"}  # UI gets a small summary, not the bytes

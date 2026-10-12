@@ -39,8 +39,8 @@ DISTANCES = ("sprint triathlon", "olympic triathlon", "70.3", "140.6", "5k", "10
 _ATHLETE_TEXT = {"experience": 300, "training_days": 200, "injuries": 500,
                  "preferences": 500}
 _GOAL_TEXT = {"title": 80, "event": 120, "distance": 40, "target": 160, "priorities": 600,
-              "plan": 6000, "notes": 2000}
-PLAN_CONTEXT_CHARS = 4000
+              "plan": 12000, "notes": 2000}
+PLAN_CONTEXT_CHARS = 8000
 MAX_PLAN_FILES = 10
 
 
@@ -405,6 +405,9 @@ class CoachStore:
                 if len(plan) > PLAN_CONTEXT_CHARS:
                     plan = plan[:PLAN_CONTEXT_CHARS] + " ...[truncated]"
                 lines.append(f"Their training plan (your summary of what they shared): {plan}")
+                files = ", ".join(f"{f['name']} (id {f['id']})" for f in g.get("plan_files", []))
+                if files:
+                    lines.append(f"Plan files (reopen with read_file for details): {files}")
             else:
                 lines.append("Training plan: none shared yet. If it would help, invite them to "
                              "upload it (PDF or screenshots) or describe it.")

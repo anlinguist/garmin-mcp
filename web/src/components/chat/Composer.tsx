@@ -96,7 +96,7 @@ export function Composer({ disabled, streaming, onSend, onStop, placeholder, dra
 
   return (
     <div
-      className={cn('composer-bar relative z-40 shrink-0 border-t border-(--border) bg-(--bg) px-3 pb-[max(10px,env(safe-area-inset-bottom))] pt-2.5 transition-all duration-200',
+      className={cn('relative z-40 shrink-0 border-t border-(--border) bg-(--bg) px-3 pb-[max(10px,env(safe-area-inset-bottom))] pt-2.5 transition-all duration-200',
         dragging && 'border-accent bg-accent/5')}
       onDragEnter={(e) => { if (e.dataTransfer.types.includes('Files')) { dragDepth.current++; setDragging(true) } }}
       onDragLeave={() => { dragDepth.current = Math.max(0, dragDepth.current - 1); if (!dragDepth.current) setDragging(false) }}

@@ -128,7 +128,3 @@ html.msg-menu-open .selectable, html.msg-menu-open .selectable * { -webkit-user-
 @media (prefers-reduced-motion: reduce) {
   .msg-lifted, .msg-menu, .msg-menu-backdrop, .rabbit-toast { animation-duration: 0.01ms; }
 }
-
-/* Keyboard open (lib/viewport.ts): the home indicator is under the keyboard, so the
-   composer doesn't need its safe-area padding. */
-html.kb-open .composer-bar { padding-bottom: 8px; }

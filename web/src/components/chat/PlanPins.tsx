@@ -155,13 +155,20 @@ export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay }: {
 }) {
   const [open, setOpenState] = useState(false)
   const [openKey, setOpenKey] = useState<string | null>(null)
+  // The drawer may use all the room below the card (down to the safe area).
+  const cardRef = useRef<HTMLDivElement>(null)
+  const [room, setRoom] = useState<number | null>(null)
   // Stay above the dimming until the drawer has finished sliding shut.
   const [raised, setRaised] = useState(false)
   const lowerTimer = useRef<number | null>(null)
   const setOpen = (next: boolean | ((v: boolean) => boolean)) => {
     const v = typeof next === 'function' ? next(open) : next
     if (lowerTimer.current) window.clearTimeout(lowerTimer.current)
-    if (v) setRaised(true)
+    if (v) {
+      setRaised(true)
+      const bottom = cardRef.current?.getBoundingClientRect().bottom
+      if (bottom != null) setRoom(Math.max(200, (window.visualViewport?.height ?? window.innerHeight) - bottom - 16))
+    }
     else lowerTimer.current = window.setTimeout(() => setRaised(false), 340)
     setOpenState(v)
   }
@@ -188,7 +195,7 @@ export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay }: {
     <div className="coach-pins shrink-0 border-b border-(--border) bg-(--bg) px-3 pb-2.5 pt-0">
       {/* Only the card rises above the dimming; the drawer slides down over the feed. */}
       <div className={cn('relative mx-auto max-w-2xl', raised && 'z-[46]')}>
-      <div className={cn('overflow-hidden border border-border bg-(--bg-surface) shadow-sm transition-[border-radius] duration-200',
+      <div ref={cardRef} className={cn('overflow-hidden border border-border bg-(--bg-surface) shadow-sm transition-[border-radius] duration-200',
         open ? 'rounded-t-xl' : 'rounded-xl')}>
         <button onClick={() => setOpen((v) => !v)} aria-expanded={open}
           className="flex w-full items-center gap-2 px-3 pb-2 pt-2 text-left">
@@ -220,7 +227,8 @@ export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay }: {
       </div>
         <div className={cn('week-drawer', open && 'week-drawer--open')} aria-hidden={!open} inert={!open}>
           <div className="min-h-0 overflow-hidden">
-          <div className="max-h-[52vh] overflow-y-auto overscroll-contain pb-1">
+          <div className="overflow-y-auto overscroll-contain pb-1"
+            style={{ maxHeight: room ? `calc(${room}px - env(safe-area-inset-bottom))` : '52vh' }}>
             <button onClick={() => { setOpen(false); onOpenPlan() }}
               className="flex w-full items-center gap-3 border-b border-(--border) px-3 py-2.5 text-left active:bg-(--bg-inset)">
               <span className="flex size-[30px] shrink-0 items-center justify-center rounded-lg bg-(--accent-subtle) text-(--accent)">

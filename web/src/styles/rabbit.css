@@ -177,16 +177,12 @@ html.kb-open .coach-pins { display: none; }
   opacity: 0; pointer-events: none; transition: opacity 0.22s ease; }
 .week-dim--open { opacity: 1; pointer-events: auto; }
 .week-drawer {
-  position: absolute; left: 0; right: 0; top: 100%;
-  display: grid; grid-template-rows: 0fr;
-  border: 1px solid var(--border); border-top: none; border-radius: 0 0 0.75rem 0.75rem;
-  background: var(--bg-surface); box-shadow: var(--shadow-lg);
-  opacity: 0; visibility: hidden;
-  /* closing: slide up first, fade only at the very end */
-  transition: grid-template-rows 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.1s ease 0.22s, visibility 0s linear 0.32s;
+  display: grid; grid-template-rows: 0fr; visibility: hidden;
+  /* closing: the card's rounded bottom rides up with the edge */
+  transition: grid-template-rows 0.3s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s linear 0.3s;
 }
-.week-drawer--open { grid-template-rows: 1fr; opacity: 1; visibility: visible;
-  transition: grid-template-rows 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.15s ease, visibility 0s; }
+.week-drawer--open { grid-template-rows: 1fr; visibility: visible;
+  transition: grid-template-rows 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s; }
 /* A session's details open accordion-style under its line. */
 .session-detail { display: grid; grid-template-rows: 0fr; opacity: 0;
   transition: grid-template-rows 0.22s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.15s ease; }

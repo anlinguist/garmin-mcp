@@ -1,6 +1,6 @@
 // Pinned to the top of the coach log: the plan (tap to open it) and "This week",
 // which expands into planned vs. done by day. Weeks follow the plan's own weeks.
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   Activity, Bike, Check, MessageCircle, ChevronRight, Dumbbell, Footprints, Layers, Map as MapIcon, Moon, Waves,
 } from 'lucide-react'
@@ -161,18 +161,26 @@ export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay }: {
   // Stay above the dimming until the drawer has finished sliding shut.
   const [raised, setRaised] = useState(false)
   const lowerTimer = useRef<number | null>(null)
-  // Bottom corners: square while the drawer is attached, easing back to round as it closes.
-  const [squared, setSquared] = useState(false)
-  const cornerTimer = useRef<number | null>(null)
+  // The card is one rounded box (header + drawer) floating over the feed; this spacer keeps
+  // the header's height in the layout so opening the drawer never pushes the feed.
+  const headRef = useRef<HTMLButtonElement>(null)
+  const [headH, setHeadH] = useState<number | null>(null)
+  useLayoutEffect(() => {
+    const el = headRef.current
+    if (!el) return
+    const measure = () => setHeadH(el.offsetHeight + 2) // + the card's 1px borders
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
   const setOpen = (next: boolean | ((v: boolean) => boolean)) => {
     const v = typeof next === 'function' ? next(open) : next
     if (lowerTimer.current) window.clearTimeout(lowerTimer.current)
-    if (cornerTimer.current) window.clearTimeout(cornerTimer.current)
-    if (v) setSquared(true)
-    else cornerTimer.current = window.setTimeout(() => setSquared(false), 150)
     if (v) {
       setRaised(true)
-      const bottom = cardRef.current?.getBoundingClientRect().bottom
+      const bottom = headRef.current?.getBoundingClientRect().bottom
       if (bottom != null) setRoom(Math.max(200, (window.visualViewport?.height ?? window.innerHeight) - bottom - 16))
     }
     else lowerTimer.current = window.setTimeout(() => setRaised(false), 340)
@@ -180,7 +188,6 @@ export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay }: {
   }
   useEffect(() => () => {
     if (lowerTimer.current) window.clearTimeout(lowerTimer.current)
-    if (cornerTimer.current) window.clearTimeout(cornerTimer.current)
   }, [])
   const t = week?.totals
   const hasPlan = !!goal.plan
@@ -203,10 +210,10 @@ export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay }: {
     <div className={cn('week-dim', open && 'week-dim--open')} onClick={() => setOpen(false)} aria-hidden />
     <div className="coach-pins shrink-0 border-b border-(--border) bg-(--bg) px-3 pb-2.5 pt-0">
       {/* Only the card rises above the dimming; the drawer slides down over the feed. */}
-      <div className={cn('relative mx-auto max-w-2xl', raised && 'z-[46]')}>
-      <div ref={cardRef} className={cn('overflow-hidden border border-border bg-(--bg-surface) shadow-sm transition-[border-radius] duration-200 ease-out',
-        squared ? 'rounded-t-xl' : 'rounded-xl')}>
-        <button onClick={() => setOpen((v) => !v)} aria-expanded={open}
+      <div className={cn('relative mx-auto max-w-2xl', raised && 'z-[46]')} style={headH ? { height: headH } : undefined}>
+      <div ref={cardRef} className={cn('overflow-hidden rounded-xl border border-border bg-(--bg-surface) transition-shadow duration-300',
+        headH && 'absolute inset-x-0 top-0', raised ? 'shadow-lg' : 'shadow-sm')}>
+        <button ref={headRef} onClick={() => setOpen((v) => !v)} aria-expanded={open}
           className="flex w-full items-center gap-2 px-3 pb-2 pt-2 text-left">
           <span className="min-w-0 flex-1">
             <span className="flex items-baseline gap-2">
@@ -233,10 +240,9 @@ export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay }: {
             )}
           </span>
         </button>
-      </div>
         <div className={cn('week-drawer', open && 'week-drawer--open')} aria-hidden={!open} inert={!open}>
           <div className="min-h-0 overflow-hidden">
-          <div className="overflow-y-auto overscroll-contain pb-1"
+          <div className="overflow-y-auto overscroll-contain border-t border-(--border) pb-1"
             style={{ maxHeight: room ? `calc(${room}px - env(safe-area-inset-bottom))` : '52vh' }}>
             <button onClick={() => { setOpen(false); onOpenPlan() }}
               className="flex w-full items-center gap-3 border-b border-(--border) px-3 py-2.5 text-left active:bg-(--bg-inset)">
@@ -261,6 +267,7 @@ export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay }: {
           </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
     </>

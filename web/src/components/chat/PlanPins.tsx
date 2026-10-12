@@ -189,15 +189,7 @@ export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay }: {
   useEffect(() => () => {
     if (lowerTimer.current) window.clearTimeout(lowerTimer.current)
   }, [])
-  const t = week?.totals
   const hasPlan = !!goal.plan
-  let progress = ''
-  if (t && week?.plan_status === 'ready' && t.planned_sessions) {
-    progress = `${t.done_sessions}/${t.planned_sessions} done`
-  } else if (t) {
-    const n = t.done_sessions + t.extra_sessions
-    progress = n ? `${n} workout${n === 1 ? '' : 's'}` : 'No workouts yet'
-  }
   const reading = loading && hasPlan && !week
 
   // One line: where you are in the plan and which days (falls back to "This week").
@@ -220,9 +212,7 @@ export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay }: {
               <span className="truncate text-[0.5882rem] font-semibold uppercase tracking-widest text-muted-foreground">
                 {where}{week ? ` · ${fmtRange(week.start, week.end)}` : ''}
               </span>
-              <span className="ml-auto shrink-0 text-[0.6471rem] text-muted-foreground">
-                {reading ? 'Reading your plan…' : progress}
-              </span>
+              {reading && <span className="ml-auto shrink-0 text-[0.6471rem] text-muted-foreground">Reading your plan…</span>}
             </span>
             {week ? (
               <span className="mt-1.5 flex justify-between px-1">

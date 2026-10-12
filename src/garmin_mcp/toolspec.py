@@ -42,9 +42,17 @@ PROFILE_DESC = (
 
 GOAL_DESC = (
     "Save or update the athlete's active goal: title, event, date (YYYY-MM-DD), distance, "
-    "target, priorities. Creates the goal if none is active, otherwise updates it. Don't use "
-    "this to replace their goal with a different race: tell them to start a new goal in "
-    "Settings. Pass just the fields that changed."
+    "target, priorities. Creates the goal if none is active, otherwise updates it; pass just "
+    "the fields that changed. To switch to a different race (archiving the current goal), set "
+    "replace_current=true, but only after the athlete has explicitly confirmed the switch."
+)
+
+PLAN_DESC = (
+    "Save your summary of the athlete's training plan on the active goal, after they upload or "
+    "describe it. Write a compact, week-by-week (or phase-by-phase) summary with dates where "
+    "known: key sessions, long-session targets, recovery weeks, races. Under 6000 characters. "
+    "Pass attachment_ids of the plan files they sent (shown as [Attached this turn: ...]) so the "
+    "originals stay linked. Rewrites the whole summary; include earlier content you're keeping."
 )
 
 AGENT_TOOLS: list[dict] = [
@@ -113,7 +121,21 @@ AGENT_TOOLS: list[dict] = [
                 "distance": {"type": "string"},
                 "target": {"type": "string"},
                 "priorities": {"type": "string"},
+                "replace_current": {"type": "boolean",
+                                    "description": "Start a new goal and archive the current one."},
             },
+        },
+    },
+    {
+        "name": "save_plan",
+        "description": PLAN_DESC,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "summary": {"type": "string", "maxLength": 6000},
+                "attachment_ids": {"type": "array", "items": {"type": "string"}, "maxItems": 10},
+            },
+            "required": ["summary"],
         },
     },
     {

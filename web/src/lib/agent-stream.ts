@@ -8,8 +8,15 @@ export type StreamEvent =
   | { type: 'tool-call-start'; toolCallId: string; toolName: string; params: Record<string, unknown> }
   | { type: 'tool-call-result'; toolCallId: string; toolName: string; result: unknown }
   | { type: 'tool-call-error'; toolCallId: string; toolName: string; error: string }
+  | { type: 'approval-request'; approvalCallId: string; toolName: string; params: Record<string, unknown>; summary: ApprovalSummary }
+  | { type: 'approval-result'; approvalCallId: string; approved: boolean; reason: string | null }
   | { type: 'usage'; promptTokens: number; completionTokens: number; totalTokens: number }
   | { type: 'result'; response: AgentResponse }
+
+export type ApprovalSummary = {
+  title: string; detail?: string
+  changes: { field: string; from: string | null; to: string }[]
+}
 
 export type AgentResponse =
   | { status: 'done'; turnId?: string; message: string; steps: number }

@@ -82,7 +82,7 @@ export function SettingsPanels({ me, goal, onEditGoal, onChange, onDevDone }: {
               {goal ? `${goal.title}${goalCountdown(goal) ? ` · ${goalCountdown(goal)}` : ''}` : 'Not set yet'}
             </p>
           </div>
-          <Button onClick={onEditGoal}>{goal ? 'Edit' : 'Set goal'}</Button>
+          <Button onClick={onEditGoal}>What Rabbit knows</Button>
         </section>
         <section className="panel flex flex-col gap-3">
           <div className="flex items-start gap-3">

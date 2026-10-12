@@ -12,6 +12,10 @@ from garmin_mcp.coaching import NO_GOAL, CoachError, CoachStore, training_phase
 from tests.test_agent import Scripted, collect, go, tid, tool_block  # noqa: F401
 
 
+async def _yes(req):
+    return True, None
+
+
 @pytest.fixture
 def coach(tmp_path, fernet_key) -> CoachStore:
     return CoachStore(AppStore(tmp_path / "app", fernet_key))
@@ -149,8 +153,62 @@ def test_agent_saves_goal_and_profile(tmp_path, fernet_key) -> None:
     assert goal["event"] == "70.3 CdA" and goal["date"] == "2027-06-27"
     assert agent.coach.athlete("friend") == {"weekly_hours": 9.0, "units": "imperial"}
     events, emit = collect()
-    go(agent, "friend", "aiming for sub 5:30", emit)
+    go(agent, "friend", "aiming for sub 5:30", emit, approve=_yes)
     assert agent.coach.active_goal("friend")["target"] == "sub-5:30"  # updated, not replaced
     assert len(agent.coach.goals("friend")["goals"]) == 1
     err = next(e for e in events if e["type"] == "tool-call-error")
     assert "YYYY-MM-DD" in err["error"]
+
+
+def test_agentic_onboarding_plan_and_goal_switch(tmp_path, fernet_key) -> None:
+    from garmin_mcp.agent import Agent
+    from garmin_mcp.providers.fake import FakeGarminProvider
+    from garmin_mcp.registry import Registry
+    from garmin_mcp.resilience import RateLimiter, TTLCache
+    from garmin_mcp.tokens import EncryptedFileTokenStore
+    from garmin_mcp.tools import GarminService
+    from tests.test_attachments import PDF
+
+    tokens = EncryptedFileTokenStore(tmp_path / "t", fernet_key)
+    store = AppStore(tmp_path / "a", fernet_key)
+    svc = GarminService(FakeGarminProvider(tokens, delay=0), Registry(), allow_writes=False,
+                        cache=TTLCache(1), limiter=RateLimiter(100), max_response_bytes=10_000)
+    backend = Scripted([])
+    agent = Agent(svc, store, backend, daily_token_budget=1_000_000)
+    pdf = agent.attachments.save("friend", "plan.pdf", PDF)
+    stranger = agent.attachments.save("andrew", "theirs.pdf", PDF)
+
+    backend.steps = [
+        ([], [tool_block("save_plan", {"summary": "wk1 base"})], "tool_use"),  # no goal yet
+        ([], [tool_block("save_goal", {"event": "70.3 CdA", "date": "2027-06-27"}, 1),
+              tool_block("save_plan", {"summary": "Wk 1-4 base: 3x swim...", "attachment_ids": [pdf["id"]]}, 2),
+              tool_block("save_plan", {"summary": "x", "attachment_ids": [stranger["id"]]}, 3)],
+         "tool_use"),
+        (["Saved your goal and plan."], [], "end_turn"),
+    ]
+    events, emit = collect()
+    go(agent, "friend", "Training for CdA, here's my plan", emit, approve=_yes,
+       attachments=[{"id": pdf["id"], "name": "plan.pdf", "kind": "pdf", "mime": "application/pdf", "size": 1}])
+    errs = [e["error"] for e in events if e["type"] == "tool-call-error"]
+    assert "Save the goal first" in errs[0]
+    assert "not found" in errs[1]  # another user's upload can't be linked
+    goal = agent.coach.active_goal("friend")
+    assert goal["plan"] == "Wk 1-4 base: 3x swim..." and goal["plan_files"][0]["id"] == pdf["id"]
+    # first prompt told the model the attachment ids, and that onboarding is needed
+    first = backend.calls[0][-1]["content"]
+    assert "Onboarding" in first and f"(id {pdf['id']})" in first
+    # later turns carry the plan in context
+    backend.steps = [(["ok"], [], "end_turn")]
+    go(agent, "friend", "what's this week?")
+    assert "Wk 1-4 base" in backend.calls[-1][-1]["content"]
+
+    # switching races needs replace_current; otherwise it's an update of the same goal
+    backend.steps = [
+        ([], [tool_block("save_goal", {"event": "Boise 70.3", "date": "2027-06-12",
+                                        "replace_current": True}, 4)], "tool_use"),
+        (["Switched."], [], "end_turn"),
+    ]
+    go(agent, "friend", "CdA is off, I'm doing Boise instead. Yes, switch.", approve=_yes)
+    goals = agent.coach.goals("friend")
+    assert agent.coach.active_goal("friend")["event"] == "Boise 70.3"
+    assert len(goals["goals"]) == 2 and any(g["archived_at"] for g in goals["goals"])

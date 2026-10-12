@@ -32,7 +32,10 @@ export function toolLabel(toolName: string, params: Record<string, unknown>): st
     return `Looked at your last ${days} days of${sport} activities`
   }
   if (toolName === 'search') return 'Looked up what Garmin data is available'
-  if (toolName === 'update_notes') return 'Updated my notes about you'
+  if (toolName === 'update_notes') return 'Updated my coach notes'
+  if (toolName === 'update_athlete_profile') return 'Noted something about you'
+  if (toolName === 'save_plan') return 'Saved your plan'
+  if (toolName === 'save_goal') return params.replace_current ? 'Started a new goal' : 'Saved your goal'
   if (toolName === 'execute') {
     const method = String(params.method ?? '')
     const args = (params.args ?? {}) as Record<string, unknown>

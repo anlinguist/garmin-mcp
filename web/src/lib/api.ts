@@ -96,6 +96,7 @@ export type Athlete = {
 export type Goal = {
   id: string; title: string; event: string; date: string | null; distance: string
   target: string; priorities: string; notes: string; created: number; archived_at: number | null
+  plan?: string; plan_files?: { id: string; name: string; kind: string; mime: string; size: number }[]
 }
 export type Thread = {
   id: string; kind: 'coach' | 'topic'; title: string; goal_id: string

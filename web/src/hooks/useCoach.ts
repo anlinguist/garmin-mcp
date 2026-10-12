@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getJSON } from '@/lib/api'
-import { attachTurn, sendChat, type StreamEvent } from '@/lib/agent-stream'
+import { attachTurn, sendChat, type ApprovalSummary, type StreamEvent } from '@/lib/agent-stream'
 import type { AttachmentMeta } from '@/lib/attachments'
 
 export type ChatMessage = {
@@ -23,13 +23,18 @@ export type ToolCall = {
   kind: 'tool'; id: string; toolName: string; params: Record<string, unknown>
   status: 'executing' | 'done' | 'error'; result?: unknown; error?: string
 }
-export type ChatItem = ChatMessage | ToolCall | ThreadLink
+export type Approval = {
+  kind: 'approval'; id: string; turnId: string | null; summary: ApprovalSummary
+  status: 'pending' | 'approved' | 'declined'; reason?: string | null
+}
+export type ChatItem = ChatMessage | ToolCall | ThreadLink | Approval
 export type Status = 'loading' | 'idle' | 'streaming'
 
 type Part =
   | { type: 'text'; text: string }
   | { type: 'thread_link'; thread_id: string; from_turn: string | null }
-  | { type: 'tool_call'; toolCallId: string; toolName: string; params: Record<string, unknown>; result?: unknown; error?: string }
+  | { type: 'tool_call'; toolCallId: string; toolName: string; params: Record<string, unknown>; result?: unknown; error?: string
+      approval?: { summary: ApprovalSummary; approved: boolean; reason: string | null } }
 type StoredTurn = {
   id: string; ts: number; kind: 'chat' | 'proactive' | 'seed' | 'link'
   label?: 'brief' | 'workout' | null; user: string | null; parts: Part[]
@@ -55,6 +60,10 @@ function turnsToItems(turns: StoredTurn[]): ChatItem[] {
           turnId: t.id, turnKind: t.kind, label: first ? (t.label ?? (t.kind === 'proactive' ? 'note' : null)) : null })
         first = false
       } else {
+        if (p.approval) {
+          items.push({ kind: 'approval', id: `ap-${p.toolCallId}`, turnId: t.id, summary: p.approval.summary,
+            status: p.approval.approved ? 'approved' : 'declined', reason: p.approval.reason })
+        }
         items.push({
           kind: 'tool', id: p.toolCallId, toolName: p.toolName, params: p.params ?? {},
           status: p.error ? 'error' : 'done', result: p.result, error: p.error,
@@ -98,6 +107,15 @@ export function useCoach(threadId: string | null, activeTurn: string | null) {
       case 'tool-call-error':
         setItems((prev) => prev.map((it) => (it.id === e.toolCallId && it.kind === 'tool'
           ? { ...it, status: 'error', error: e.error } : it)))
+        break
+      case 'approval-request':
+        openMsg.current = null
+        setItems((prev) => [...prev, { kind: 'approval', id: `ap-${e.approvalCallId}`,
+          turnId: turnRef.current?.id ?? null, summary: e.summary, status: 'pending' }])
+        break
+      case 'approval-result':
+        setItems((prev) => prev.map((it) => (it.id === `ap-${e.approvalCallId}` && it.kind === 'approval'
+          ? { ...it, status: e.approved ? 'approved' : 'declined', reason: e.reason } : it)))
         break
       case 'result':
         openMsg.current = null
@@ -205,5 +223,15 @@ export function useCoach(threadId: string | null, activeTurn: string | null) {
     }).catch(() => {})
   }, [])
 
-  return { items, status, send, stop, clear, reload: loadHistory }
+  const decide = useCallback(async (approvalId: string, approved: boolean, reason?: string) => {
+    const t = turnRef.current
+    if (!t) return
+    const callId = approvalId.replace(/^ap-/, '')
+    await fetch(`/app/api/chat/${encodeURIComponent(t.id)}/approval`, {
+      method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ approval_id: callId, approved, reason: reason || null }),
+    }).catch(() => {})
+  }, [])
+
+  return { items, status, send, stop, decide, clear, reload: loadHistory }
 }

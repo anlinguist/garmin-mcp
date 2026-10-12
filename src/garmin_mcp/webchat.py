@@ -22,6 +22,7 @@ from .agent import Agent
 
 KEEP_FINISHED = 300
 HEARTBEAT = 15.0
+APPROVAL_TIMEOUT = 600.0
 
 
 class TurnBusy(Exception):
@@ -43,6 +44,18 @@ class Turn:
     _subs: list[asyncio.Queue] = field(default_factory=list, repr=False)
     _finished: asyncio.Event = field(default_factory=asyncio.Event, repr=False)
     _task: asyncio.Task | None = field(default=None, repr=False)
+    _approvals: dict[str, asyncio.Future] = field(default_factory=dict, repr=False)
+
+    async def ask(self, request: dict[str, Any]) -> tuple[bool, str | None]:
+        """Wait for the athlete to approve or decline (declined after the timeout)."""
+        fut: asyncio.Future = asyncio.get_running_loop().create_future()
+        self._approvals[request["id"]] = fut
+        try:
+            return await asyncio.wait_for(fut, timeout=APPROVAL_TIMEOUT)
+        except TimeoutError:
+            return False, "no answer within 10 minutes"
+        finally:
+            self._approvals.pop(request["id"], None)
 
     def emit(self, event: dict[str, Any]) -> None:
         self.events.append(event)
@@ -104,7 +117,8 @@ class ChatRunner:
                     turn.record = await self.agent.run(
                         user_id, text, turn.emit, thread_id=thread_id, turn_id=turn.id,
                         kind=kind, label=label, attachments=attachments,
-                        content_blocks=content_blocks)
+                        content_blocks=content_blocks,
+                        approve=turn.ask if kind == "chat" else None)
             except asyncio.CancelledError:
                 pass  # stopped by the user; agent.run already saved the partial turn
             except Exception as e:  # agent.run handles its own errors; this is a backstop
@@ -121,6 +135,15 @@ class ChatRunner:
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
         return turn
+
+    def resolve(self, user_id: str, turn_id: str, approval_id: str, approved: bool,
+                reason: str | None) -> bool:
+        turn = self.get(user_id, turn_id)
+        fut = turn._approvals.get(approval_id) if turn is not None else None
+        if fut is None or fut.done():
+            return False
+        fut.set_result((approved, reason))
+        return True
 
     def cancel(self, user_id: str, turn_id: str) -> bool:
         """Stop a running turn; the agent saves what was written so far."""

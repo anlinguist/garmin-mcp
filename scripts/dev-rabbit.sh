@@ -13,7 +13,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 MODE="${1:-mac}"
-DIR=data/rabbit-dev
+DIR="${RABBIT_DEV_DIR:-data/rabbit-dev}"
 mkdir -p "$DIR" && chmod 700 data "$DIR"
 
 # Stable local keys so sessions and push subscriptions survive restarts.

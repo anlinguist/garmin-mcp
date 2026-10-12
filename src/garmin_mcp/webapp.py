@@ -364,6 +364,19 @@ def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
                                  "turn_id": e.turn_id}, status_code=409)
         return _ndjson(turn, 0)
 
+    async def chat_approval(request: Request, user_id: str) -> Response:
+        if chat is None:
+            return _err(503, "Chat isn't configured on this server.")
+        body = await read_json(request)
+        approval_id = _str(body, "approval_id", 64)
+        approved = body.get("approved")
+        if not isinstance(approved, bool):
+            raise ValueError("approved")
+        reason = body.get("reason")
+        reason = reason.strip()[:300] if isinstance(reason, str) and reason.strip() else None
+        ok = chat.resolve(user_id, request.path_params["turn_id"], approval_id, approved, reason)
+        return JSONResponse({"ok": ok}, status_code=200 if ok else 409)
+
     async def chat_cancel(request: Request, user_id: str) -> Response:
         if chat is None:
             return _err(503, "Chat isn't configured on this server.")
@@ -571,6 +584,8 @@ def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
         Route("/app/api/chat/{turn_id}/events", _api(chat_events, mutating=False),
               methods=["GET"]),
         Route("/app/api/chat/{turn_id}/cancel", _api(chat_cancel, mutating=True),
+              methods=["POST"]),
+        Route("/app/api/chat/{turn_id}/approval", _api(chat_approval, mutating=True),
               methods=["POST"]),
         Route("/app/api/attachments", attachment_upload, methods=["POST"]),
         Route("/app/api/attachments/{att_id}", _api(attachment_get, mutating=False),

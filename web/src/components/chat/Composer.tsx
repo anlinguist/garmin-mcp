@@ -13,12 +13,16 @@ type Pending = {
 
 let n = 0
 
-export function Composer({ disabled, streaming, onSend, onStop, placeholder }: {
+export const ATTACH_INPUT_ID = 'rabbit-attach'
+
+export function Composer({ disabled, streaming, onSend, onStop, placeholder, draft }: {
   disabled: boolean
   streaming: boolean
   onSend: (text: string, attachments: AttachmentMeta[]) => void
   onStop: () => void
   placeholder: string
+  /** prefill from elsewhere ("Tell Rabbit…"); bump n to apply again */
+  draft?: { text: string; n: number } | null
 }) {
   const [input, setInput] = useState('')
   const [files, setFiles] = useState<Pending[]>([])
@@ -36,6 +40,14 @@ export function Composer({ disabled, streaming, onSend, onStop, placeholder }: {
     ta.style.height = `${Math.min(ta.scrollHeight, 22 * 5 + 12)}px`
   }, [])
   useEffect(resize, [input, resize])
+  useEffect(() => {
+    if (!draft) return
+    setInput(draft.text)
+    requestAnimationFrame(() => {
+      const ta = ref.current
+      if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length) }
+    })
+  }, [draft?.n]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => files.forEach((f) => f.preview && URL.revokeObjectURL(f.preview)), []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const filesRef = useRef<Pending[]>([])
@@ -136,7 +148,9 @@ export function Composer({ disabled, streaming, onSend, onStop, placeholder }: {
           className="flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-40">
           <Paperclip className="size-[18px]" />
         </button>
-        <input ref={picker} type="file" className="hidden" multiple accept={ACCEPT}
+        {/* id lets "Upload my plan" buttons elsewhere open this picker via <label htmlFor>,
+            which keeps the tap a real user gesture (iOS won't open pickers otherwise) */}
+        <input ref={picker} id={ATTACH_INPUT_ID} type="file" className="hidden" multiple accept={ACCEPT}
           onChange={(e) => { addFiles(Array.from(e.target.files ?? [])); e.target.value = '' }} />
         <textarea
           ref={ref}

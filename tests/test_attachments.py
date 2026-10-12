@@ -94,7 +94,8 @@ def test_attachment_reaches_model_once_and_stays_in_history(env, tmp_path) -> No
             await runner.wait_idle()
             first = backend.calls[0][-1]["content"]
             assert first[0]["type"] == "document" and first[0]["source"]["media_type"] == "application/pdf"
-            assert first[-1]["text"].endswith("(see attached)")
+            assert "(see attached)" in first[-1]["text"]
+            assert first[-1]["text"].endswith(f"[Attached this turn: plan.pdf (id {meta['id']})]")
             body = {"message": "and next week?", "thread_id": thread}
             await c.post("/app/api/chat", headers=HDRS, content=json.dumps(body).encode())
             await runner.wait_idle()

@@ -38,7 +38,10 @@ DISTANCES = ("sprint triathlon", "olympic triathlon", "70.3", "140.6", "5k", "10
 
 _ATHLETE_TEXT = {"experience": 300, "training_days": 200, "injuries": 500,
                  "preferences": 500}
-_GOAL_TEXT = {"title": 80, "event": 120, "distance": 40, "target": 160, "priorities": 600}
+_GOAL_TEXT = {"title": 80, "event": 120, "distance": 40, "target": 160, "priorities": 600,
+              "plan": 6000, "notes": 2000}
+PLAN_CONTEXT_CHARS = 4000
+MAX_PLAN_FILES = 10
 
 
 class CoachError(ValueError):
@@ -145,7 +148,8 @@ class CoachStore:
         goal = {"id": _new_id("g"), "created": now, "archived_at": None, "notes": "",
                 "title": g.get("title"), "event": g.get("event", ""), "date": g.get("date"),
                 "distance": g.get("distance", ""), "target": g.get("target", ""),
-                "priorities": g.get("priorities", "")}
+                "priorities": g.get("priorities", ""), "plan": g.get("plan", ""),
+                "plan_files": []}
 
         def add(d: dict[str, Any]) -> bool:
             goals = d.setdefault("goals", {})
@@ -174,6 +178,25 @@ class CoachStore:
             if goal is None:
                 raise CoachError("goal not found")
             goal.update(g)
+            return dict(goal)
+        return self._goals_doc(user_id).update(apply)
+
+    def set_plan(self, user_id: str, summary: str,
+                 files: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+        """Store Rabbit's summary of the athlete's plan on the active goal, linking the
+        uploaded originals (attachment metadata) for the UI."""
+        g = self.active_goal(user_id)
+        if g is None:
+            raise CoachError("Save the goal first (save_goal), then the plan.")
+        summary = _clean_text(summary, _GOAL_TEXT["plan"], "plan")
+
+        def apply(d: dict[str, Any]) -> dict[str, Any]:
+            goal = d["goals"][g["id"]]
+            goal["plan"] = summary
+            if files:
+                known = {f["id"] for f in goal.get("plan_files", [])}
+                goal["plan_files"] = (goal.get("plan_files", []) +
+                                      [f for f in files if f["id"] not in known])[-MAX_PLAN_FILES:]
             return dict(goal)
         return self._goals_doc(user_id).update(apply)
 
@@ -368,9 +391,18 @@ class CoachStore:
                 if g.get(k):
                     bits.append(f"{k.capitalize()}: {g[k]}.")
             lines.append(" ".join(bits))
+            if g.get("plan"):
+                plan = g["plan"]
+                if len(plan) > PLAN_CONTEXT_CHARS:
+                    plan = plan[:PLAN_CONTEXT_CHARS] + " ...[truncated]"
+                lines.append(f"Their training plan (your summary of what they shared): {plan}")
+            else:
+                lines.append("Training plan: none shared yet. If it would help, invite them to "
+                             "upload it (PDF or screenshots) or describe it.")
         else:
-            lines.append("Active goal: none set. If they mention a race or goal, offer to save "
-                         "it with save_goal.")
+            lines.append("Active goal: none set yet. Onboarding: find out what they're training "
+                         "for (race or event, date, target) and invite them to upload their plan. "
+                         "Save what you learn as you go.")
         lines.append(f"Coach notes: {self.notes(user_id) or 'none yet'}")
         if thread is not None:
             lines.append("Thread: the coach log (briefs and workout notes)." if thread["kind"] == "coach"

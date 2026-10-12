@@ -1,5 +1,7 @@
 /* Rabbit-specific additions on top of Dolly's globals. */
 html, body, #root { height: 100%; }
+/* No iOS tap-highlight flash: Rabbit gives its own press feedback (bubbles shrink/lift). */
+html { -webkit-tap-highlight-color: transparent; }
 body { overscroll-behavior: none; }
 
 .app-shell {

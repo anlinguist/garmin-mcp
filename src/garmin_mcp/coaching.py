@@ -147,14 +147,22 @@ class CoachStore:
                 "distance": g.get("distance", ""), "target": g.get("target", ""),
                 "priorities": g.get("priorities", "")}
 
-        def add(d: dict[str, Any]) -> None:
+        def add(d: dict[str, Any]) -> bool:
             goals = d.setdefault("goals", {})
             prev = d.get("active")
             if prev and prev in goals:
                 goals[prev]["archived_at"] = now
             goals[goal["id"]] = goal
             d["active"] = goal["id"]
-        self._goals_doc(user_id).update(add)
+            return not prev
+        first = self._goals_doc(user_id).update(add)
+        if first:
+            # The first goal adopts the pre-goal coach log and chats, so nothing vanishes.
+            def adopt(d: dict[str, Any]) -> None:
+                for t in d.get("threads", {}).values():
+                    if t["goal_id"] == NO_GOAL:
+                        t["goal_id"] = goal["id"]
+            self._threads_doc(user_id).update(adopt)
         self.coach_thread(user_id)  # pinned log for the new goal
         return goal
 

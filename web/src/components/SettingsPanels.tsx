@@ -1,16 +1,17 @@
 import { useState } from 'react'
-import { Bell, LogOut, Radio, Watch } from 'lucide-react'
+import { Bell, LogOut, Radio, Target, Watch } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { CoachingSettings } from '@/components/CoachingSettings'
 import { ConnectGarmin } from '@/components/ConnectGarmin'
-import { postJSON, postStream, signOut, type Me } from '@/lib/api'
+import { goalCountdown, postJSON, postStream, signOut, type Goal, type Me } from '@/lib/api'
 import { enablePush, isStandalone, pushSupported, sendTestPush } from '@/lib/push'
 
 // Settings sheet content: Garmin connection, notifications, device checks, account.
-export function SettingsPanels({ me, onChange, onClearChat, onDevDone }: {
+export function SettingsPanels({ me, goal, onEditGoal, onChange, onDevDone }: {
   me: Me
+  goal: Goal | null
+  onEditGoal: () => void
   onChange: () => void
-  onClearChat: () => void
   onDevDone: () => void
 }) {
   const [pushMsg, setPushMsg] = useState<string | null>(null)
@@ -73,6 +74,16 @@ export function SettingsPanels({ me, onChange, onClearChat, onDevDone }: {
 
   return (
     <div className="flex flex-col gap-4">
+        <section className="panel flex items-start gap-3">
+          <Target className="mt-0.5 size-5 text-(--accent)" />
+          <div className="min-w-0 flex-1">
+            <h2 className="font-medium">Goal</h2>
+            <p className="truncate text-sm text-(--text-secondary)">
+              {goal ? `${goal.title}${goalCountdown(goal) ? ` · ${goalCountdown(goal)}` : ''}` : 'Not set yet'}
+            </p>
+          </div>
+          <Button onClick={onEditGoal}>{goal ? 'Edit' : 'Set goal'}</Button>
+        </section>
         <section className="panel flex flex-col gap-3">
           <div className="flex items-start gap-3">
             <Watch className="mt-0.5 size-5 text-(--accent)" />
@@ -140,9 +151,6 @@ export function SettingsPanels({ me, onChange, onClearChat, onDevDone }: {
           <h2 className="font-medium">Account</h2>
           <p className="text-sm text-(--text-secondary)">Signed in as {me.profile.name || me.user_id}.</p>
           <div className="flex flex-wrap gap-2">
-            <Button disabled={busy} onClick={() => {
-              if (window.confirm('Clear your chat history with Rabbit? Your notes and Garmin connection stay.')) onClearChat()
-            }}>Clear chat</Button>
             <Button variant="ghost" onClick={() => void signOut().finally(onChange)}>
               <LogOut className="mr-1.5 size-3.5" /> Sign out
             </Button>

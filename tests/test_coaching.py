@@ -39,11 +39,12 @@ def test_goal_lifecycle_and_coach_threads(coach) -> None:
                                       "distance": "70.3", "target": "sub-5:30"})
     assert g1["title"] == "Ironman 70.3 Coeur d'Alene"
     c1 = coach.coach_thread("friend")
-    assert c1["goal_id"] == g1["id"] and c1["id"] != before["id"]
+    assert c1["goal_id"] == g1["id"] and c1["id"] == before["id"]  # first goal adopts the log
     g2 = coach.create_goal("friend", {"title": "Spring marathon", "date": "2027-04-18"})
     goals = {g["id"]: g for g in coach.goals("friend")["goals"]}
     assert goals[g1["id"]]["archived_at"] and coach.active_goal("friend")["id"] == g2["id"]
-    assert coach.threads("friend")[0]["goal_id"] == g2["id"]  # each goal has its own log
+    c2 = coach.threads("friend")[0]
+    assert c2["goal_id"] == g2["id"] and c2["id"] != c1["id"]  # later goals start a fresh log
     coach.archive_goal("friend", g2["id"])
     assert coach.active_goal("friend") is None
 

@@ -37,6 +37,10 @@ trap cleanup EXIT INT TERM
 case "$MODE" in
   mac)
     export PUBLIC_BASE_URL=http://localhost:8001 DEV_NO_AUTH_USER="${DEV_NO_AUTH_USER:-andrew}"
+    # Reuse the dev Anthropic key from phone.env, if there is one (nothing else from it).
+    if [[ -z "${ANTHROPIC_API_KEY:-}" && -f "$DIR/phone.env" ]]; then
+      ANTHROPIC_API_KEY=$(sed -n 's/^ANTHROPIC_API_KEY=//p' "$DIR/phone.env"); export ANTHROPIC_API_KEY
+    fi
     uv run garmin-mcp & pids+=($!)
     echo "==> Rabbit: http://localhost:5173/app/  (signed in as $DEV_NO_AUTH_USER; Ctrl-C to stop)"
     (cd web && bun run dev) & pids+=($!)

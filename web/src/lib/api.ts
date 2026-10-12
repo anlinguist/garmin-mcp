@@ -28,6 +28,8 @@ export type Me = {
   profile: { name: string; picture: string }
   chat: { available: boolean; active_turn: string | null }
   settings: CoachSettings
+  athlete: Athlete
+  goal: Goal | null
   dev: { fake_garmin: boolean; tools: string[] }
   garmin_connected: boolean
   garmin: {
@@ -84,4 +86,51 @@ export async function postRaw<T>(path: string, body: unknown = {}): Promise<{ st
   let data: unknown = null
   try { data = await r.json() } catch { /* empty */ }
   return { status: r.status, data: data as T }
+}
+
+// ------------------------------------------------------- coaching state ---
+export type Athlete = {
+  experience?: string; units?: 'metric' | 'imperial'; weekly_hours?: number | null; age?: number | null
+  training_days?: string; injuries?: string; preferences?: string
+}
+export type Goal = {
+  id: string; title: string; event: string; date: string | null; distance: string
+  target: string; priorities: string; notes: string; created: number; archived_at: number | null
+}
+export type Thread = {
+  id: string; kind: 'coach' | 'topic'; title: string; goal_id: string
+  created: number; updated: number; seed: { thread_id: string; turn_id: string } | null
+}
+
+export async function sendJSON<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const r = await fetch(`/app${path}`, {
+    method, credentials: 'same-origin',
+    headers: { 'content-type': 'application/json' },
+    body: body === undefined ? '{}' : JSON.stringify(body),
+  })
+  if (r.status === 401) throw new AuthError('not signed in')
+  const data = await r.json().catch(() => ({}))
+  if (!r.ok) throw new Error(data.error ?? `HTTP ${r.status}`)
+  return data as T
+}
+
+export const listThreads = () => getJSON<{ goal: Goal | null; threads: Thread[] }>('/api/threads')
+export const createThread = (from?: { thread_id: string; turn_id: string }) =>
+  sendJSON<Thread>('POST', '/api/threads', from ? { from } : {})
+export const renameThread = (id: string, title: string) => sendJSON<Thread>('PATCH', `/api/threads/${id}`, { title })
+export const deleteThread = (id: string) => sendJSON<{ ok: boolean }>('DELETE', `/api/threads/${id}`)
+export const createGoal = (g: Partial<Goal>) => sendJSON<Goal>('POST', '/api/goals', g)
+export const updateGoal = (id: string, g: Partial<Goal>) => sendJSON<Goal>('PATCH', `/api/goals/${id}`, g)
+export const archiveGoal = (id: string) => sendJSON<{ ok: boolean }>('POST', `/api/goals/${id}/archive`)
+export const putAthlete = (a: Athlete) => sendJSON<Athlete>('PUT', '/api/athlete', a)
+
+/** "36 wks · base" style summary for headers. */
+export function goalCountdown(goal: Goal | null): string {
+  if (!goal?.date) return ''
+  const days = Math.floor((new Date(`${goal.date}T12:00:00`).getTime() - Date.now()) / 86_400_000)
+  if (days < 0) return 'done'
+  if (days <= 7) return 'race week'
+  const weeks = Math.floor(days / 7)
+  const phase = weeks < 3 ? 'taper' : weeks < 8 ? 'peak' : weeks < 16 ? 'build' : 'base'
+  return `${weeks} wks · ${phase}`
 }

@@ -11,18 +11,27 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { getJSON } from '@/lib/api'
 import { attachTurn, sendChat, type StreamEvent } from '@/lib/agent-stream'
 
-export type ChatMessage = { kind: 'message'; id: string; role: 'user' | 'agent'; text: string; error?: boolean }
+export type ChatMessage = {
+  kind: 'message'; id: string; role: 'user' | 'agent'; text: string; error?: boolean
+  /** coach-log metadata: which stored turn this came from, and what kind */
+  turnId?: string; ts?: number; label?: 'brief' | 'workout' | 'note' | null; turnKind?: string
+}
+export type ThreadLink = { kind: 'link'; id: string; threadId: string; fromTurn: string | null; ts: number }
 export type ToolCall = {
   kind: 'tool'; id: string; toolName: string; params: Record<string, unknown>
   status: 'executing' | 'done' | 'error'; result?: unknown; error?: string
 }
-export type ChatItem = ChatMessage | ToolCall
+export type ChatItem = ChatMessage | ToolCall | ThreadLink
 export type Status = 'loading' | 'idle' | 'streaming'
 
 type Part =
   | { type: 'text'; text: string }
+  | { type: 'thread_link'; thread_id: string; from_turn: string | null }
   | { type: 'tool_call'; toolCallId: string; toolName: string; params: Record<string, unknown>; result?: unknown; error?: string }
-type StoredTurn = { id: string; ts: number; kind: 'chat' | 'proactive'; user: string | null; parts: Part[] }
+type StoredTurn = {
+  id: string; ts: number; kind: 'chat' | 'proactive' | 'seed' | 'link'
+  label?: 'brief' | 'workout' | null; user: string | null; parts: Part[]
+}
 
 let seq = 0
 const uid = (p: string) => `${p}-${Date.now().toString(36)}-${(seq++).toString(36)}`
@@ -30,10 +39,15 @@ const uid = (p: string) => `${p}-${Date.now().toString(36)}-${(seq++).toString(3
 function turnsToItems(turns: StoredTurn[]): ChatItem[] {
   const items: ChatItem[] = []
   for (const t of turns) {
-    if (t.user) items.push({ kind: 'message', id: `${t.id}-u`, role: 'user', text: t.user })
+    if (t.user) items.push({ kind: 'message', id: `${t.id}-u`, role: 'user', text: t.user, ts: t.ts })
+    let first = true
     t.parts.forEach((p, i) => {
-      if (p.type === 'text') {
-        items.push({ kind: 'message', id: `${t.id}-${i}`, role: 'agent', text: p.text })
+      if (p.type === 'thread_link') {
+        items.push({ kind: 'link', id: `${t.id}-${i}`, threadId: p.thread_id, fromTurn: p.from_turn, ts: t.ts })
+      } else if (p.type === 'text') {
+        items.push({ kind: 'message', id: `${t.id}-${i}`, role: 'agent', text: p.text, ts: t.ts,
+          turnId: t.id, turnKind: t.kind, label: first ? (t.label ?? (t.kind === 'proactive' ? 'note' : null)) : null })
+        first = false
       } else {
         items.push({
           kind: 'tool', id: p.toolCallId, toolName: p.toolName, params: p.params ?? {},
@@ -45,7 +59,7 @@ function turnsToItems(turns: StoredTurn[]): ChatItem[] {
   return items
 }
 
-export function useCoach(activeTurn: string | null) {
+export function useCoach(threadId: string | null, activeTurn: string | null) {
   const [items, setItems] = useState<ChatItem[]>([])
   const [status, setStatus] = useState<Status>('loading')
   const turnRef = useRef<{ id: string; seen: number } | null>(null)
@@ -121,24 +135,30 @@ export function useCoach(activeTurn: string | null) {
   }, [consume])
 
   const loadHistory = useCallback(async () => {
+    if (!threadId) return
     try {
-      const page = await getJSON<{ turns: StoredTurn[] }>('/api/messages?limit=60')
+      const page = await getJSON<{ turns: StoredTurn[] }>(`/api/threads/${threadId}/messages?limit=60`)
       setItems(turnsToItems(page.turns))
     } catch {
       setItems([])
     }
-  }, [])
+  }, [threadId])
 
+  const first = useRef(true)
   useEffect(() => {
+    if (!threadId) return
+    openMsg.current = null
+    setStatus('loading')
     void (async () => {
       await loadHistory()
       setStatus('idle')
-      if (activeTurn) { // a reply was still running when the app was closed
+      if (first.current && activeTurn) { // a reply was still running when the app was closed
         turnRef.current = { id: activeTurn, seen: 0 }
         await reattach()
       }
+      first.current = false
     })()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [threadId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Coming back to the app: pick up a reply that kept running in the background.
   useEffect(() => {
@@ -153,20 +173,20 @@ export function useCoach(activeTurn: string | null) {
 
   const send = useCallback(async (text: string) => {
     const message = text.trim()
-    if (!message || busy.current) return
+    if (!message || busy.current || !threadId) return
     busy.current = true
     openMsg.current = null
     setItems((prev) => [...prev, { kind: 'message', id: uid('u'), role: 'user', text: message }])
     setStatus('streaming')
     let dropped = false
     try {
-      dropped = await consume(sendChat(message))
+      dropped = await consume(sendChat(message, threadId))
     } finally {
       busy.current = false
       if (dropped && document.visibilityState === 'visible') void reattach()
       else if (!dropped) { turnRef.current = null; setStatus('idle') }
     }
-  }, [consume, reattach])
+  }, [consume, reattach, threadId])
 
   const clear = useCallback(() => setItems([]), [])
 

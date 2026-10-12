@@ -310,6 +310,10 @@ def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
         thread = _thread_or_404(user_id, body.get("thread_id"))
         if thread is None:
             return _err(404, "thread not found")
+        if thread["kind"] == "topic" and not thread.get("title"):
+            words = " ".join(message.split())
+            _coach().rename_thread(user_id, thread["id"],
+                                   words if len(words) <= 60 else words[:57].rstrip() + "...")
         try:
             turn = chat.start(user_id, message, thread_id=thread["id"])
         except TurnBusy as e:

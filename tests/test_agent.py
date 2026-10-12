@@ -300,6 +300,7 @@ def test_chat_endpoint_streams_ndjson_and_saves_history(env, tmp_path, fernet_ke
             assert page["turns"][-1]["id"] == turn_id
             assert page["turns"][-1]["user"] == "how was it?"
             assert "assistant" not in page["turns"][-1]  # UI gets parts only
+            assert page["thread"]["title"] == "how was it?"  # untitled topic named from 1st msg
             again = await c.get(f"/app/api/chat/{turn_id}/events", params={"from": 4})
             assert [json.loads(x)["type"] for x in again.text.splitlines() if x.strip()] == [
                 "usage", "result"]

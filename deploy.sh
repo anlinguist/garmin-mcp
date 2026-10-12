@@ -56,7 +56,7 @@ fi
 # plus the built frontend.
 { git ls-files -co --exclude-standard -z
   if [[ "$APP" == rabbit ]]; then find src/garmin_mcp/web_dist -type f -print0; fi
-} | tar --null -czf "$BUNDLE" -T -
+} | COPYFILE_DISABLE=1 tar --no-xattrs --null -czf "$BUNDLE" -T -
 echo "==> Uploading $APP release $REL"
 gcloud compute scp "$BUNDLE" "$VM_NAME:/tmp/$APP-$REL.tgz" \
   --project "$PROJECT" --zone "$ZONE" --tunnel-through-iap

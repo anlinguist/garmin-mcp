@@ -240,6 +240,7 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
           <div className="mx-auto max-w-2xl space-y-4 py-4">
             {rows.map((r) => {
               if (r.kind === 'link') {
+                if (!byId[r.item.threadId]) return null // chat was deleted
                 return <ThreadLinkCard key={r.item.id} thread={byId[r.item.threadId]} onOpen={() => setThreadId(r.item.threadId)} />
               }
               if (r.kind === 'approval') {

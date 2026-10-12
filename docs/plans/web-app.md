@@ -52,7 +52,7 @@ token chain).
 
 ```
 iPhone (installed web app)
-   │  HTTPS, same origin: garmin.anlinguist.com/app/...
+   │  HTTPS, same origin: <domain>/app/...
    ▼
 Caddy ─┬─► garmin-mcp.service :8000   /mcp, /authorize, /token, /github/callback (unchanged)
        └─► rabbit.service     :8001   (/app*, MCP_ENABLED=false)
@@ -362,8 +362,8 @@ built bundle has no inline scripts.
 
 ## Infra and ops
 
-- Google Cloud console (project `an-personal-website`): OAuth client (Web), redirect URI
-  `https://garmin.anlinguist.com/app/auth/google/callback`, consent screen
+- Google Cloud console (your project): OAuth client (Web), redirect URI
+  `https://<domain>/app/auth/google/callback`, consent screen
   External and published, scopes `openid email` only.
 - Secret Manager: Google client secret, Anthropic API key, VAPID private key.
   Grant the VM service account access (extend `infra/setup.sh`).

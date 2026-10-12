@@ -1,8 +1,9 @@
 [project]
 name = "garmin-mcp"
 version = "0.1.0"
-description = "Remote MCP server exposing Garmin Connect data to Claude"
+description = "Remote MCP server exposing Garmin Connect data to Claude, plus Rabbit, a phone coach app"
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.12,<3.13"
 # Exact pins; uv.lock pins the transitive tree. Bump deliberately.
 dependencies = [

@@ -1,7 +1,19 @@
 # garmin-mcp
 
-A remote MCP server that gives Claude (web, desktop, mobile) read access to your
-Garmin Connect data. It uses streamable HTTP with MCP OAuth 2.1, and GitHub handles login.
+Two ways to coach yourself with your Garmin data and Claude:
+
+- **An MCP server** that gives Claude (web, desktop, mobile) read access to your Garmin Connect
+  data: activities, sleep, HRV, VO2 max, training readiness and more. It uses streamable HTTP with
+  MCP OAuth 2.1, and GitHub handles login.
+- **Rabbit**, a coach app for your phone's Home Screen, for people who won't set up an MCP
+  connector. Sign in with Google, connect Garmin, and talk to it like a coach. It reviews your
+  training history before asking you anything, reads your training plan (PDF or screenshots) and
+  tracks each week against it, and sends a morning brief and a note after each workout.
+
+![Rabbit: coach's log, this week's plan, and settings](docs/images/rabbit.jpg)
+
+This is a personal project. I run one instance for myself and a friend, and each deployment is
+self-hosted on a small GCP VM with your own Claude API key.
 
 > **Heads-up:** Garmin has no personal API. This uses the unofficial
 > [`garminconnect`](https://github.com/cyberjunky/python-garminconnect) library,
@@ -29,18 +41,27 @@ src/garmin_mcp/
   shaping.py           bulky-field removal + size cap
   resilience.py        TTL cache + per-user rate limiter
   tools.py             search / execute / recent_activities (transport-independent)
+  toolspec.py          tool descriptions shared by the MCP server and Rabbit's agent
   poller.py            workout-sync poller: new activities -> Claude Code routine
   auth.py              MCP OAuth authorization server backed by GitHub
   webauth.py           Rabbit web app: Google sign-in + cookie sessions
   webpush.py           Rabbit web app: Web Push (VAPID + aes128gcm), SSRF-guarded
   webapp.py            Rabbit web app: /app routes and static frontend
   appstore.py          small Fernet-encrypted JSON docs (sessions, per-user data)
+  agent.py             Rabbit's coach agent: Claude tool loop over GarminService, streamed
+  coaching.py          Rabbit: athlete profile, goals, plans, threads and history
+  history.py           Rabbit: training_history (months of activity in one tool call)
+  weekplan.py          Rabbit: "this week" planned vs done
+  proactive.py         Rabbit: morning brief, workout notes, reconnect nudge
+  webchat.py           Rabbit: chat turns that outlive the request
+  attachments.py       Rabbit: validated image/PDF/text uploads
+  garminlogin.py       Rabbit: user-initiated Connect Garmin flow
   server.py            MCPServer app, uvicorn on 127.0.0.1
   login_cli.py         garmin-mcp-login
 web/                   Rabbit frontend (Vite + React, ported from Dolly); builds into src/garmin_mcp/web_dist
 brand/                 Rabbit logo (SVG)
-infra/                 setup.sh, bootstrap-vm.sh, systemd unit, Caddyfile
-deploy.sh              push + restart over IAP
+infra/                 setup.sh, bootstrap scripts, systemd units, Caddyfile
+deploy.sh              push + restart over IAP (--rabbit for the web app)
 scripts/smoke_live.py  live check against your real account (not CI)
 ```
 
@@ -155,6 +176,10 @@ Set `GARMIN_API_TLS_IMPERSONATION=true` in `/etc/garmin-mcp/env`, then run
 
 ## Deploying updates
 
+IAP uploads are slow unless gcloud's Python has NumPy. The deploy scripts use
+`~/.local/share/gcloud-python` when it exists (see `infra/gcloud-python.sh`):
+`uv venv --python 3.12 ~/.local/share/gcloud-python && VIRTUAL_ENV=~/.local/share/gcloud-python uv pip install numpy`.
+
 ```bash
 uv lock                 # only when you change dependencies
 ./deploy.sh             # upload working tree, uv sync --frozen, switch release, restart, health check
@@ -221,8 +246,9 @@ To enable it:
 
 Rabbit is a phone-friendly coach app at `$PUBLIC_BASE_URL/app/` for people who won't set up an MCP
 connector: Google sign-in, Web Push, a Connect Garmin page, and a coach agent (Claude Haiku) with
-morning briefs, workout notes, a plan view and threads. The
-plan is in `docs/plans/web-app.md`.
+the same Garmin tools plus `training_history`. It keeps a coach's log (morning briefs, workout
+notes), separate chats by topic, the athlete's goal and plan, and a "this week" view of planned vs
+done. Access is an allowlist of Google accounts. The design notes are in `docs/plans/web-app.md`.
 
 **It runs as a separate service** so testing it can never take down the MCP connector:
 `rabbit.service` on 127.0.0.1:8001, its own system user (`rabbit`), data dir (`/var/lib/rabbit`),
@@ -246,14 +272,14 @@ the MCP server. Local keys, sessions and push subscriptions live in `./data/rabb
   non-localhost URLs). One-time setup:
   ```bash
   brew install cloudflared
-  cloudflared tunnel login                       # browser: pick the anlinguist.com zone
+  cloudflared tunnel login                       # browser: pick your zone
   cloudflared tunnel create rabbit-dev
-  cloudflared tunnel route dns rabbit-dev rabbit-dev.anlinguist.com
+  cloudflared tunnel route dns rabbit-dev rabbit-dev.<your-domain>
   ```
-  Add `https://rabbit-dev.anlinguist.com/app/auth/google/callback` as a redirect URI on the Google
+  Add `https://rabbit-dev.<your-domain>/app/auth/google/callback` as a redirect URI on the Google
   OAuth client, then create `data/rabbit-dev/phone.env` (mode 600):
   ```bash
-  RABBIT_DEV_URL=https://rabbit-dev.anlinguist.com
+  RABBIT_DEV_URL=https://rabbit-dev.<your-domain>
   CLOUDFLARE_TUNNEL=rabbit-dev
   GOOGLE_CLIENT_ID=...apps.googleusercontent.com
   GOOGLE_CLIENT_SECRET=...
@@ -268,8 +294,9 @@ On the VM:
    ```bash
    pbpaste | tr -d '\n' | gcloud secrets versions add garmin-mcp-anthropic-api-key --project <PROJECT> --data-file=-
    ```
-2. Google Cloud console → **APIs & Services → OAuth consent screen**: External, scopes `openid` and
-   `email` only, then **Publish app** (no verification needed for these scopes). **Credentials →
+2. Google Cloud console → **Google Auth Platform**: External, scopes `openid`, `email` and
+   `profile` only. Either add each user under **Audience → Test users** (up to 100), or
+   **Publish app** (no verification needed for these scopes; the allowlist still limits access). **Credentials →
    Create OAuth client ID → Web application**, authorized redirect URI
    `https://<domain>/app/auth/google/callback`. Store the secret:
    ```bash
@@ -278,13 +305,15 @@ On the VM:
 3. `./deploy.sh --rabbit --bootstrap`: creates the user, dirs, `/etc/rabbit/env` (from
    `infra/rabbit.env.example`) and the unit, and re-renders the Caddyfile (validated first; a
    graceful reload that doesn't restart the MCP server). The first start fails until step 4.
-4. On the VM, fill in `GOOGLE_CLIENT_ID`, `ALLOWED_GOOGLE_USERS` and `VAPID_SUBJECT` in
-   `/etc/rabbit/env`, then `sudo systemctl restart rabbit`.
+4. Fill in `/etc/rabbit/env` and restart Rabbit (or edit the file on the VM by hand):
+   ```bash
+   scripts/rabbit-prod-env.sh <google_client_id> "you@gmail.com:you,friend@gmail.com:friend" mailto:you@example.com
+   ```
 5. Later updates: `./deploy.sh --rabbit` (builds `web/` locally with bun; restarts only Rabbit).
    `./deploy.sh --rabbit --rollback` rolls back only Rabbit. Logs: `journalctl -u rabbit -f`.
 
 On an iPhone: open the URL in Safari → Share → **Add to Home Screen**, open Rabbit from the Home
-Screen, sign in, tap **Turn on notifications**, then **Send test**, and run the streaming check.
+Screen, sign in, connect Garmin, then turn on notifications in Settings and **Send a test notification**.
 Removing someone from `ALLOWED_GOOGLE_USERS` (and restarting) revokes their sessions immediately.
 
 ## Switching to Garmin's official API later
@@ -296,3 +325,7 @@ The tools depend only on `GarminProvider`, `GarminSession` and the method regist
 ## Configuration
 
 Every variable is listed and explained in [`.env.example`](.env.example).
+
+## License
+
+[MIT](LICENSE). Garmin and Ironman are trademarks of their owners; this project isn't affiliated with either.

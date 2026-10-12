@@ -150,14 +150,14 @@
   /* Dark Mode (system preference — applies when no .light/.dark class is set) */
   @media (prefers-color-scheme: dark) {
     :root:not(.light) {
-      --bg: #0f2218;
-      --bg-surface: #162b20;
-      --bg-elevated: #1e3829;
-      --bg-inset: #0b1a12;
+      --bg: #121413;
+      --bg-surface: #1b1d1c;
+      --bg-elevated: #262927;
+      --bg-inset: #0c0d0d;
 
-      --text: #d3ddd5;
-      --text-secondary: #a8bfae;
-      --text-muted: #6a8a72;
+      --text: #e4e7e5;
+      --text-secondary: #b4bab6;
+      --text-muted: #889089;
 
       --brand: #a8d5b5;
       --brand-hover: #c8ecd4;
@@ -165,7 +165,7 @@
 
       --accent: #a8d5b5;
       --accent-hover: #c8ecd4;
-      --accent-subtle: rgba(168, 213, 181, 0.08);
+      --accent-subtle: rgba(168, 213, 181, 0.10);
 
       --msg-user-bg: #2d5a3d;
       --msg-user-text: #dde6df;
@@ -173,8 +173,8 @@
       --btn-approve-bg: #3d7a52;
       --btn-approve-text: #ffffff;
 
-      --border: rgba(143, 188, 143, 0.10);
-      --border-strong: rgba(143, 188, 143, 0.18);
+      --border: rgba(255, 255, 255, 0.08);
+      --border-strong: rgba(255, 255, 255, 0.14);
 
       --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
       --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.3);
@@ -183,9 +183,9 @@
       /* Logo — dark background variant */
       --logo-wool: #a8d5b5;
       --logo-legs: #a8d5b5;
-      --logo-saddle: #0f2218;
+      --logo-saddle: #121413;
       --logo-head: #a8d5b5;
-      --logo-shadow: #0f2218;
+      --logo-shadow: #121413;
       --logo-shadow-opacity: 0.55;
 
       /* Shadcn Dark Equivalents */
@@ -196,14 +196,14 @@
 
   /* Dark Mode (forced via .dark class) */
   :root.dark {
-    --bg: #0f2218;
-    --bg-surface: #162b20;
-    --bg-elevated: #1e3829;
-    --bg-inset: #0b1a12;
+    --bg: #121413;
+    --bg-surface: #1b1d1c;
+    --bg-elevated: #262927;
+    --bg-inset: #0c0d0d;
 
-    --text: #d3ddd5;
-    --text-secondary: #a8bfae;
-    --text-muted: #6a8a72;
+    --text: #e4e7e5;
+    --text-secondary: #b4bab6;
+    --text-muted: #889089;
 
     --brand: #a8d5b5;
     --brand-hover: #c8ecd4;
@@ -211,7 +211,7 @@
 
     --accent: #a8d5b5;
     --accent-hover: #c8ecd4;
-    --accent-subtle: rgba(168, 213, 181, 0.08);
+    --accent-subtle: rgba(168, 213, 181, 0.10);
 
     --msg-user-bg: #2d5a3d;
     --msg-user-text: #dde6df;
@@ -219,8 +219,8 @@
     --btn-approve-bg: #3d7a52;
     --btn-approve-text: #ffffff;
 
-    --border: rgba(143, 188, 143, 0.10);
-    --border-strong: rgba(143, 188, 143, 0.18);
+    --border: rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(255, 255, 255, 0.14);
 
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
     --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.3);
@@ -229,9 +229,9 @@
     /* Logo — dark background variant */
     --logo-wool: #a8d5b5;
     --logo-legs: #a8d5b5;
-    --logo-saddle: #0f2218;
+    --logo-saddle: #121413;
     --logo-head: #a8d5b5;
-    --logo-shadow: #0f2218;
+    --logo-shadow: #121413;
     --logo-shadow-opacity: 0.55;
 
     /* Shadcn Dark Equivalents */

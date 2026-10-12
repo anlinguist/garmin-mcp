@@ -71,7 +71,7 @@ html, body { overscroll-behavior: none; }
 }
 
 /* Charts (ported from CPM). Categorical order validated with the dataviz validator
-   against Rabbit's surfaces: light #fafaf8 and dark #162b20 (all checks pass; light
+   against Rabbit's surfaces: light #fafaf8 and dark #1b1d1c (all checks pass; light
    contrast WARN is relieved by tooltips, legend and the "Show data" table). A single
    series uses --accent. */
 :root {
@@ -83,13 +83,13 @@ html, body { overscroll-behavior: none; }
   :root:not(.light) {
     --chart-1: #3987e5; --chart-2: #d95926; --chart-3: #199e70; --chart-4: #c98500;
     --chart-5: #d55181; --chart-6: #008300; --chart-7: #9085e9; --chart-8: #e66767;
-    --chart-grid: rgba(143, 188, 143, 0.12);
+    --chart-grid: rgba(255, 255, 255, 0.10);
   }
 }
 :root.dark {
   --chart-1: #3987e5; --chart-2: #d95926; --chart-3: #199e70; --chart-4: #c98500;
   --chart-5: #d55181; --chart-6: #008300; --chart-7: #9085e9; --chart-8: #e66767;
-  --chart-grid: rgba(143, 188, 143, 0.12);
+  --chart-grid: rgba(255, 255, 255, 0.10);
 }
 @keyframes cpm-bar-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
 @keyframes cpm-draw { to { stroke-dashoffset: 0; } }

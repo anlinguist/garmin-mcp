@@ -64,6 +64,8 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
   const [goal, setGoal] = useState<Goal | null>(me.goal)
   const [threadId, setThreadId] = useState<string | null>(null)
   const [queued, setQueued] = useState<QueuedSend | null>(null)
+  // A new chat is a client-side draft until its first message is sent (then it's created).
+  const [pending, setPending] = useState<{ seed?: { thread_id: string; turn_id: string }; seedMsg?: ChatMessage } | null>(null)
   const { items, status, send, stop, decide, reload } =
     useCoach(threadId, me.chat.active_turn, queued, () => setQueued(null))
   const [sheet, setSheet] = useState<Sheet | null>(me.garmin.connected ? null : 'settings')
@@ -121,6 +123,7 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
   const coachId = threads.find((t) => t.kind === 'coach')?.id ?? null
   // "Tell Rabbit…": go to the coach log with the composer prefilled.
   const tellRabbit = (text: string) => {
+    setPending(null)
     if (coachId) setThreadId(coachId)
     setDraft((d) => ({ text, n: (d?.n ?? 0) + 1 }))
     if (sheet) { setSheet(null); setClosing(false) }
@@ -130,12 +133,22 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
   const dismissNow = useCallback(() => { setSheet(null); setClosing(false) }, [])
   const settingsDrag = useSheetDrag(dismissNow)
 
-  async function newThread(from?: { thread_id: string; turn_id: string }) {
+  function newThread(from?: { thread_id: string; turn_id: string }, seedMsg?: ChatMessage) {
+    setPending({ seed: from, seedMsg })
+    if (sheet) close()
+  }
+
+  const openThread = (id: string) => { setPending(null); setThreadId(id) }
+
+  // First message of a draft chat: only now is the thread created on the server.
+  async function sendPending(text: string, attachments: AttachmentMeta[]) {
+    if (!pending) return
     setBusy(true)
     try {
-      const t = await createThread(from)
+      const t = await createThread(pending.seed)
+      setQueued({ threadId: t.id, text, attachments })
+      setPending(null)
       await refreshThreads(t.id)
-      if (sheet) close()
     } catch (e) {
       window.alert((e as Error).message)
     } finally {
@@ -143,7 +156,7 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
     }
   }
 
-  const isCoach = thread?.kind === 'coach'
+  const isCoach = !pending && thread?.kind === 'coach'
 
   // The coach log stays a timeline: a message typed there starts a new topic thread.
   // A brief or workout note from the last 18 hours comes along as context (like Discuss).
@@ -174,7 +187,7 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
           <RabbitLogo size={24} thinking={status === 'streaming'} className="shrink-0" />
           <span className="min-w-0">
             <span className="block truncate font-display text-lg leading-tight text-(--brand)">
-              {isCoach || !thread ? 'Rabbit' : thread.title || 'New chat'}
+              {pending ? 'New chat' : isCoach || !thread ? 'Rabbit' : thread.title || 'New chat'}
             </span>
             <span className="block truncate text-[11px] leading-tight text-muted-foreground">
               {goal ? `${goal.title}${countdown ? ` · ${countdown}` : ''}` : 'No goal set'}
@@ -182,7 +195,7 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
             </span>
           </span>
         </button>
-        <Button variant="ghost" size="icon" aria-label="New chat" disabled={busy} onClick={() => void newThread()}>
+        <Button variant="ghost" size="icon" aria-label="New chat" disabled={busy} onClick={() => newThread()}>
           <MessageSquarePlus className="size-5" />
         </Button>
         <button className="rounded-full" aria-label="Settings" onClick={() => open('settings')}>
@@ -204,7 +217,34 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
         </button>
       )}
 
-      {items.length === 0 && status !== 'loading' && isCoach && !goal ? (
+      {pending ? (
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4">
+          <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col">
+            {pending.seedMsg && (
+              <div className="rounded-xl border border-dashed border-border p-2">
+                <p className="mb-1 pl-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">From your coach log</p>
+                <CoachHeader label={pending.seedMsg.label} ts={pending.seedMsg.ts} />
+                <MessageBubble message={pending.seedMsg} showLabel={false} />
+              </div>
+            )}
+            <div className="chat-empty flex flex-1 flex-col items-center justify-center py-6 text-center">
+              {!pending.seedMsg && <RabbitLogo size={64} className="mb-3 opacity-40" />}
+              <p className="mb-2 font-display text-xl leading-tight text-(--brand)">
+                {pending.seedMsg ? 'What would you like to ask about this?' : 'Ready when you are.'}
+              </p>
+              {!pending.seedMsg && (
+                <div className="mt-3 flex w-full max-w-[300px] flex-col gap-2">
+                  {TOPIC_SUGGESTIONS.map((q) => (
+                    <button key={q} disabled={!me.chat.available || busy}
+                      className="w-full cursor-pointer rounded-(--radius) border border-border bg-background px-3.5 py-2.5 text-left text-[13px] text-foreground/80 transition-all hover:bg-secondary disabled:opacity-50"
+                      onClick={() => void sendPending(q, [])}>{q}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : items.length === 0 && status !== 'loading' && isCoach && !goal ? (
         <div className="flex flex-1 flex-col justify-end overflow-y-auto px-4 py-4">
           <div className="mx-auto w-full max-w-2xl">
             <div className="mb-3 flex items-center gap-2 pl-1"><RabbitLogo size={22} />
@@ -245,7 +285,7 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
             {rows.map((r) => {
               if (r.kind === 'link') {
                 if (!byId[r.item.threadId]) return null // chat was deleted
-                return <ThreadLinkCard key={r.item.id} thread={byId[r.item.threadId]} onOpen={() => setThreadId(r.item.threadId)} />
+                return <ThreadLinkCard key={r.item.id} thread={byId[r.item.threadId]} onOpen={() => openThread(r.item.threadId)} />
               }
               if (r.kind === 'approval') {
                 return <ApprovalCard key={r.item.id} item={r.item}
@@ -261,7 +301,7 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
                   <CoachHeader label={m.label} ts={m.ts} />
                   <MessageBubble message={m} showLabel={r.showLabel} />
                   {isCoach && m.turnKind === 'proactive' && m.turnId && thread && (
-                    <DiscussButton busy={busy} onClick={() => void newThread({ thread_id: thread.id, turn_id: m.turnId! })} />
+                    <DiscussButton busy={busy} onClick={() => newThread({ thread_id: thread.id, turn_id: m.turnId! }, m)} />
                   )}
                 </div>
               )
@@ -276,10 +316,11 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
       )}
 
       <Composer
-        disabled={status !== 'idle' || !me.chat.available || !threadId || busy}
+        disabled={pending ? (!me.chat.available || busy || status === 'streaming')
+          : (status !== 'idle' || !me.chat.available || !threadId || busy)}
         streaming={status === 'streaming'}
         onStop={() => void stop()}
-        onSend={(t, a) => void (isCoach ? sendFromLog(t, a) : send(t, a))}
+        onSend={(t, a) => void (pending ? sendPending(t, a) : isCoach ? sendFromLog(t, a) : send(t, a))}
         draft={draft}
         placeholder={!me.chat.available ? 'Chat isn’t configured yet' : waitingOnYou ? 'Approve or decline above…'
           : status === 'streaming' ? 'Rabbit is replying…' : isCoach ? 'Start a new chat…' : 'Ask Rabbit…'}
@@ -287,8 +328,8 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
 
       {sheet === 'threads' && (
         <ThreadsSheet goal={goal} threads={threads} activeId={threadId} closing={closing} onDismissed={dismissNow}
-          onSelect={(id) => { setThreadId(id); close() }}
-          onNew={() => void newThread()}
+          onSelect={(id) => { openThread(id); close() }}
+          onNew={() => newThread()}
           onDelete={async (id) => {
             try { await deleteThread(id); await refreshThreads() } catch (e) { window.alert((e as Error).message) }
           }}

@@ -84,6 +84,9 @@ html, body { overscroll-behavior: none; }
 .selectable { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
 .msg-press { transition: transform 0.15s ease; }
 .msg-press:active { transform: scale(0.985); }
+/* Once the menu is open, the bubble can't be (re)selected: iOS would otherwise show its
+   Copy bar when the finger lifts. */
+.msg-lifted, .msg-lifted * { -webkit-user-select: none !important; user-select: none !important; }
 .msg-lifted {
   position: relative; z-index: 60;
   animation: msg-lift 0.32s cubic-bezier(0.2, 0.9, 0.25, 1.15) forwards;

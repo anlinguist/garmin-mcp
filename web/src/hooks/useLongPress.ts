@@ -72,5 +72,19 @@ export function useLongPress(onTrigger: (el: HTMLElement) => void) {
     fire(e.currentTarget)
   }, [fire])
 
-  return { onTouchStart, onTouchMove, onTouchEnd: cancel, onTouchCancel: cancel, onContextMenu }
+  // The lift that ends a menu-opening press: iOS shows its Copy bar here, sometimes after
+  // reselecting the word under the finger. Cancel the default and clear any selection now
+  // and shortly after, so the outcome doesn't depend on which side of the race we land.
+  const onTouchEnd = useCallback((e: React.TouchEvent) => {
+    const opened = performance.now() < settleUntil.current
+    cancel()
+    if (!opened) return
+    if (e.cancelable) e.preventDefault()
+    const clear = () => document.getSelection()?.removeAllRanges()
+    clear()
+    window.setTimeout(clear, 50)
+    window.setTimeout(clear, 300)
+  }, [cancel])
+
+  return { onTouchStart, onTouchMove, onTouchEnd, onTouchCancel: cancel, onContextMenu }
 }

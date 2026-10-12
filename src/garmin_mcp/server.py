@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import logging
 import os
 from collections.abc import AsyncIterator
+from dataclasses import dataclass, field
 from typing import Any
 
 import anyio
@@ -24,7 +26,8 @@ from starlette.routing import Route
 from .agent import Agent, AnthropicBackend
 from .appstore import AppStore
 from .garminlogin import LoginManager
-from .providers.fake import FakeGarminProvider
+from .proactive import AgentDelivery, Proactive, ProactiveThread
+from .providers.fake import FakeGarminProvider, simulate_activity
 from .auth import SCOPE, GitHubOAuthProvider
 from .config import Settings
 from .logs import log_event, setup_logging
@@ -195,13 +198,20 @@ def build_chat(settings: Settings, store: AppStore, service: GarminService) -> C
     return ChatRunner(agent, max_concurrent=settings.agent_max_concurrent)
 
 
-def build_web_routes(settings: Settings, fernet_key: str, token_store: EncryptedFileTokenStore,
-                     dev_user: str | None, provider: GarminProvider | None = None,
-                     on_tokens_changed: Any = None,
-                     service: GarminService | None = None) -> list[Any]:
-    """Rabbit web app routes (/app); empty unless APP_ENABLED."""
+@dataclass
+class RabbitParts:
+    routes: list[Any]
+    proactive: Proactive | None = None
+    loop_holder: dict[str, Any] = field(default_factory=dict)
+
+
+def build_rabbit(settings: Settings, fernet_key: str, token_store: EncryptedFileTokenStore,
+                 dev_user: str | None, provider: GarminProvider | None = None,
+                 on_tokens_changed: Any = None,
+                 service: GarminService | None = None) -> RabbitParts:
+    """Rabbit web app: routes, plus proactive messages in a Rabbit-only process."""
     if not settings.app_enabled:
-        return []
+        return RabbitParts([])
     store = AppStore(settings.app_dir, fernet_key)
     if dev_user is None:
         if not settings.google_client_id or not settings.allowed_google_users:
@@ -222,10 +232,6 @@ def build_web_routes(settings: Settings, fernet_key: str, token_store: Encrypted
     fake = _fake_garmin(settings)
     if fake and not isinstance(provider, FakeGarminProvider):
         provider = FakeGarminProvider(token_store)
-    logins = None
-    if provider is not None:
-        logins = LoginManager(provider, store,
-                              on_tokens_changed=on_tokens_changed or (lambda user_id: None))
     chat = None
     if service is not None:
         try:
@@ -233,11 +239,54 @@ def build_web_routes(settings: Settings, fernet_key: str, token_store: Encrypted
         except Exception as e:  # chat is optional; sign-in, push and Garmin connect still work
             log_event(logger, logging.ERROR, "chat_disabled", error=type(e).__name__,
                       detail=str(e)[:200] if isinstance(e, RuntimeError) else None)
+
+    parts = RabbitParts([])
+    proactive = None
+    if chat is not None and service is not None and not settings.mcp_enabled:
+        users = sorted(set(settings.allowed_google_users.values()) | ({dev_user} if dev_user else set()))
+        proactive = Proactive(
+            service=service, store=store, token_store=token_store, users=lambda: users,
+            deliver=AgentDelivery(chat, push, lambda: parts.loop_holder.get("loop")),
+            notify=(lambda u, t, b: push.send(u, t, b)) if push else (lambda u, t, b: None),
+            schedule=Schedule.parse(settings.poll_timezone, settings.poll_fast_hours,
+                                    settings.poll_fast_minutes),
+            state_dir=settings.data_dir / "poller", default_tz=settings.poll_timezone,
+        )
+    hook = on_tokens_changed or (lambda user_id: None)
+
+    def tokens_changed(user_id: str) -> None:
+        hook(user_id)
+        if proactive is not None:
+            proactive.on_connected(user_id)
+    logins = LoginManager(provider, store, on_tokens_changed=tokens_changed) if provider else None
+
+    dev = None
+    if fake and proactive is not None:
+        def simulate_workout(user_id: str) -> dict[str, Any]:
+            proactive.poll(user_id)  # baseline first, so the new activity counts as new
+            simulate_activity()
+            return proactive.poll(user_id)
+        dev = {"simulate_workout": simulate_workout,
+               "brief_now": lambda user_id: proactive.send_brief(user_id).outcome.value}
     log_event(logger, logging.INFO, "app_enabled", push=push is not None,
               garmin_connect=logins is not None, fake_garmin=fake, chat=chat is not None,
+              proactive=proactive is not None,
               model=settings.agent_model if chat else None,
               allowed_users=len(settings.allowed_google_users))
-    return build_app_routes(settings, auth, token_store, push, logins, chat, fake_garmin=fake)
+    parts.routes = build_app_routes(settings, auth, token_store, push, logins, chat,
+                                    fake_garmin=fake, dev=dev,
+                                    default_tz=settings.poll_timezone)
+    parts.proactive = proactive
+    return parts
+
+
+def build_web_routes(settings: Settings, fernet_key: str, token_store: EncryptedFileTokenStore,
+                     dev_user: str | None, provider: GarminProvider | None = None,
+                     on_tokens_changed: Any = None,
+                     service: GarminService | None = None) -> list[Any]:
+    """Rabbit routes only (used when /app is mounted inside the MCP process)."""
+    return build_rabbit(settings, fernet_key, token_store, dev_user, provider,
+                        on_tokens_changed, service).routes
 
 
 def build_poller(settings: Settings, service: GarminService,
@@ -310,13 +359,13 @@ def create_app() -> tuple[Settings, Any]:
         # Rabbit-only process (its own service, port, data dir and user): no /mcp
         # endpoint at all, and config errors are fatal here since nothing else
         # depends on this process.
-        web_routes = build_web_routes(settings, fernet_key, token_store, dev_user, provider,
-                                      service.cache.clear_user, service)
-        if not web_routes:
+        rabbit = build_rabbit(settings, fernet_key, token_store, dev_user, provider,
+                              service.cache.clear_user, service)
+        if not rabbit.routes:
             raise RuntimeError("MCP_ENABLED=false needs APP_ENABLED=true")
         log_event(logger, logging.INFO, "startup", base_url=settings.public_base_url,
                   mode="app_only")
-        return settings, build_web_only_app(web_routes)
+        return settings, build_web_only_app(rabbit.routes, rabbit)
     auth_provider = None
     if dev_user is None:
         if not settings.github_client_id or not settings.allowed_github_users:
@@ -353,11 +402,26 @@ def create_app() -> tuple[Settings, Any]:
     return settings, app
 
 
-def build_web_only_app(web_routes: list[Any]) -> Any:
-    """Starlette app with just /healthz and the Rabbit routes (no MCP, no OAuth AS)."""
+def build_web_only_app(web_routes: list[Any], rabbit: RabbitParts | None = None) -> Any:
+    """Starlette app with just /healthz and the Rabbit routes (no MCP, no OAuth AS).
+    Starts the proactive-messages thread for the app's lifetime."""
     async def healthz(request: Request) -> Response:
         return JSONResponse({"ok": True})
-    return Starlette(routes=[Route("/healthz", healthz, methods=["GET"]), *web_routes])
+
+    @contextlib.asynccontextmanager
+    async def lifespan(app: Any) -> AsyncIterator[None]:
+        thread = None
+        if rabbit is not None and rabbit.proactive is not None:
+            rabbit.loop_holder["loop"] = asyncio.get_running_loop()
+            thread = ProactiveThread(rabbit.proactive)
+            thread.start()
+        try:
+            yield
+        finally:
+            if thread is not None:
+                await anyio.to_thread.run_sync(thread.stop)
+    return Starlette(routes=[Route("/healthz", healthz, methods=["GET"]), *web_routes],
+                     lifespan=lifespan)
 
 
 def main() -> None:

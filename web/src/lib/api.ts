@@ -3,10 +3,32 @@
 
 export class AuthError extends Error {}
 
+export type CoachSettings = {
+  timezone: string
+  timezone_set: boolean
+  brief_time: string
+  brief_enabled: boolean
+  workout_feedback: boolean
+  has_notes: boolean
+}
+
+export async function putSettings(patch: Partial<CoachSettings>): Promise<CoachSettings> {
+  const r = await fetch('/app/api/settings', {
+    method: 'PUT', credentials: 'same-origin',
+    headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch),
+  })
+  if (r.status === 401) throw new AuthError('not signed in')
+  const data = await r.json().catch(() => ({}))
+  if (!r.ok) throw new Error(data.error ?? `HTTP ${r.status}`)
+  return data as CoachSettings
+}
+
 export type Me = {
   user_id: string
   profile: { name: string; picture: string }
   chat: { available: boolean; active_turn: string | null }
+  settings: CoachSettings
+  dev: { fake_garmin: boolean; tools: string[] }
   garmin_connected: boolean
   garmin: {
     connected: boolean

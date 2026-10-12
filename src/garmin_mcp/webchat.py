@@ -38,7 +38,9 @@ class Turn:
     events: list[dict[str, Any]] = field(default_factory=list)
     done: bool = False
     finished_at: float = 0.0
+    record: dict[str, Any] | None = None  # the stored turn, once finished
     _subs: list[asyncio.Queue] = field(default_factory=list, repr=False)
+    _finished: asyncio.Event = field(default_factory=asyncio.Event, repr=False)
 
     def emit(self, event: dict[str, Any]) -> None:
         self.events.append(event)
@@ -48,8 +50,13 @@ class Turn:
     def close(self) -> None:
         self.done = True
         self.finished_at = time.time()
+        self._finished.set()
         for q in self._subs:
             q.put_nowait(None)
+
+    async def wait(self) -> dict[str, Any] | None:
+        await self._finished.wait()
+        return self.record
 
 
 class ChatRunner:
@@ -90,7 +97,8 @@ class ChatRunner:
         async def go() -> None:
             try:
                 async with sem:
-                    await self.agent.run(user_id, text, turn.emit, turn_id=turn.id, kind=kind)
+                    turn.record = await self.agent.run(user_id, text, turn.emit,
+                                                       turn_id=turn.id, kind=kind)
             except Exception as e:  # agent.run handles its own errors; this is a backstop
                 turn.emit({"type": "result", "response": {
                     "status": "error", "turnId": turn.id,

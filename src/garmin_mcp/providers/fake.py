@@ -94,6 +94,32 @@ def _activity(day: date, idx: int) -> dict[str, Any] | None:
     return {k: v for k, v in a.items() if v is not None}
 
 
+_SIMULATED: list[dict[str, Any]] = []  # dev "simulate workout" additions, newest last
+
+
+def simulate_activity() -> dict[str, Any]:
+    """Add a just-finished tempo run (dev only), so the poller sees a new activity."""
+    now = datetime.now()
+    r = _rng("sim", len(_SIMULATED), now.isoformat())
+    dur = r.uniform(40, 55) * 60
+    pace = r.uniform(4.6, 4.9)
+    act = {
+        "activityId": 21_000_100_000 + len(_SIMULATED),
+        "activityName": "Tempo run 3x10 min",
+        "startTimeLocal": (now - timedelta(seconds=dur)).strftime("%Y-%m-%d %H:%M:%S"),
+        "activityType": {"typeKey": "running"},
+        "duration": round(dur, 1), "movingDuration": round(dur * 0.98, 1),
+        "distance": round(1000 / (pace * 60) * dur), "averageSpeed": round(1000 / (pace * 60), 3),
+        "averageHR": round(r.uniform(152, 160)), "maxHR": round(r.uniform(170, 178)),
+        "elevationGain": round(r.uniform(30, 90)),
+        "averageRunningCadenceInStepsPerMinute": round(r.uniform(172, 180)),
+        "aerobicTrainingEffect": 3.7, "anaerobicTrainingEffect": 1.4,
+        "trainingEffectLabel": "THRESHOLD", "activityTrainingLoad": round(r.uniform(110, 140)),
+    }
+    _SIMULATED.append(act)
+    return act
+
+
 def _activities(today: date) -> list[dict[str, Any]]:
     out = []
     for i in range(DAYS):
@@ -101,7 +127,7 @@ def _activities(today: date) -> list[dict[str, Any]]:
         a = _activity(day, i)
         if a:
             out.append(a)
-    return list(reversed(out))  # newest first, like Garmin
+    return list(reversed(out + _SIMULATED))  # newest first, like Garmin
 
 
 def _day(cdate: str) -> date:

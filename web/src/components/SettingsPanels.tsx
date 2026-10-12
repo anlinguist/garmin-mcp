@@ -1,15 +1,17 @@
 import { useState } from 'react'
 import { Bell, LogOut, Radio, Watch } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { CoachingSettings } from '@/components/CoachingSettings'
 import { ConnectGarmin } from '@/components/ConnectGarmin'
 import { postJSON, postStream, signOut, type Me } from '@/lib/api'
 import { enablePush, isStandalone, pushSupported, sendTestPush } from '@/lib/push'
 
 // Settings sheet content: Garmin connection, notifications, device checks, account.
-export function SettingsPanels({ me, onChange, onClearChat }: {
+export function SettingsPanels({ me, onChange, onClearChat, onDevDone }: {
   me: Me
   onChange: () => void
   onClearChat: () => void
+  onDevDone: () => void
 }) {
   const [pushMsg, setPushMsg] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -95,6 +97,10 @@ export function SettingsPanels({ me, onChange, onClearChat }: {
             <p className="text-xs text-(--text-muted)">Garmin connect isn't available on this server.</p>
           )}
         </section>
+
+        {me.garmin.connected && me.chat.available && (
+          <CoachingSettings me={me} onChange={onChange} onDevDone={onDevDone} />
+        )}
 
         <section className="panel flex flex-col gap-3">
           <div className="flex items-start gap-3">

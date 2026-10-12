@@ -143,11 +143,13 @@ export function useCoach(activeTurn: string | null) {
   // Coming back to the app: pick up a reply that kept running in the background.
   useEffect(() => {
     const onVisible = () => {
-      if (document.visibilityState === 'visible' && turnRef.current && !busy.current) void reattach()
+      if (document.visibilityState !== 'visible' || busy.current) return
+      if (turnRef.current) void reattach()
+      else void loadHistory() // pick up workout notes / briefs written while away
     }
     document.addEventListener('visibilitychange', onVisible)
     return () => document.removeEventListener('visibilitychange', onVisible)
-  }, [reattach])
+  }, [reattach, loadHistory])
 
   const send = useCallback(async (text: string) => {
     const message = text.trim()

@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from collections.abc import AsyncIterator, Awaitable, Callable
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +22,7 @@ from starlette.routing import BaseRoute, Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.types import Scope
 
+from .appstore import AppStore
 from .config import Settings
 from .garminlogin import Busy, Cooldown, LoginManager
 from .logs import log_event
@@ -78,7 +81,9 @@ async def read_json(request: Request) -> Any:
 def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
                      push: WebPush | None, logins: LoginManager | None = None,
                      chat: ChatRunner | None = None,
-                     *, fake_garmin: bool = False) -> list[BaseRoute]:
+                     *, fake_garmin: bool = False,
+                     dev: dict[str, Callable[[str], Any]] | None = None,
+                     default_tz: str = "America/Denver") -> list[BaseRoute]:
     local = settings.public_host.split(":")[0] in {"localhost", "127.0.0.1"}
 
     def host_ok(request: Request) -> bool:
@@ -118,6 +123,8 @@ def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
         return JSONResponse({
             "user_id": user_id,
             "profile": auth.profile(user_id),
+            "settings": _settings_view(user_id),
+            "dev": {"fake_garmin": fake_garmin, "tools": sorted(dev) if dev else []},
             "chat": {"available": chat is not None,
                      "active_turn": (t.id if chat and (t := chat.active(user_id)) else None)},
             "garmin_connected": connected,
@@ -228,6 +235,53 @@ def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
         logins.disconnect(user_id, token_store)
         return JSONResponse({"ok": True})
 
+    # ------------------------------------------------------------ settings --
+    store: AppStore | None = chat.agent._store if chat is not None else None
+
+    def _settings_view(user_id: str) -> dict[str, Any]:
+        p = store.user_doc(user_id, "profile").load() if store else {}
+        return {"timezone": p.get("timezone") or default_tz, "timezone_set": bool(p.get("timezone")),
+                "brief_time": p.get("brief_time") or "06:30",
+                "brief_enabled": p.get("brief_enabled", True),
+                "workout_feedback": p.get("workout_feedback", True),
+                "has_notes": bool(p.get("notes"))}
+
+    async def put_settings(request: Request, user_id: str) -> Response:
+        if store is None:
+            return _err(503, "Settings aren't available on this server.")
+        body = await read_json(request)
+        if not isinstance(body, dict):
+            raise ValueError("body")
+        upd: dict[str, Any] = {}
+        if "timezone" in body:
+            tz = body["timezone"]
+            try:
+                if not isinstance(tz, str) or len(tz) > 64:
+                    raise ValueError
+                ZoneInfo(tz)
+            except (ValueError, ZoneInfoNotFoundError):
+                return _err(400, "unknown timezone")
+            upd["timezone"] = tz
+        if "brief_time" in body:
+            bt = body["brief_time"]
+            if not isinstance(bt, str) or not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", bt):
+                return _err(400, "brief_time must be HH:MM")
+            upd["brief_time"] = bt
+        for key in ("brief_enabled", "workout_feedback"):
+            if key in body:
+                if not isinstance(body[key], bool):
+                    return _err(400, f"{key} must be true or false")
+                upd[key] = body[key]
+        store.user_doc(user_id, "profile").update(lambda p: p.update(upd))
+        return JSONResponse(_settings_view(user_id))
+
+    async def dev_action(request: Request, user_id: str) -> Response:
+        name = request.path_params["name"]
+        if not dev or name not in dev:
+            return _err(404, "not found")
+        out = await anyio.to_thread.run_sync(dev[name], user_id)
+        return JSONResponse({"ok": True, "result": out})
+
     # ---------------------------------------------------------------- chat --
     def _ndjson(turn: Turn, start: int) -> StreamingResponse:
         assert chat is not None
@@ -335,6 +389,8 @@ def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
               methods=["POST"]),
         Route("/app/api/push/test", _api(push_test, mutating=True), methods=["POST"]),
         Route("/app/api/diag/stream", _api(diag_stream, mutating=True), methods=["POST"]),
+        Route("/app/api/settings", _api(put_settings, mutating=True), methods=["PUT"]),
+        Route("/app/api/dev/{name}", _api(dev_action, mutating=True), methods=["POST"]),
         Route("/app/api/chat", _api(chat_send, mutating=True), methods=["POST"]),
         Route("/app/api/chat/clear", _api(chat_clear, mutating=True), methods=["POST"]),
         Route("/app/api/chat/{turn_id}/events", _api(chat_events, mutating=False),

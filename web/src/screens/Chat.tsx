@@ -7,7 +7,7 @@ import { Composer } from '@/components/chat/Composer'
 import { MessageBubble } from '@/components/chat/MessageBubble'
 import { ToolCallCard, ToolCallGroup } from '@/components/chat/ToolCallCard'
 import { Button } from '@/components/ui/button'
-import { postJSON, type Me } from '@/lib/api'
+import { postJSON, putSettings, type Me } from '@/lib/api'
 import { useCoach, type ChatItem, type ToolCall } from '@/hooks/useCoach'
 
 const SUGGESTIONS = [
@@ -44,7 +44,7 @@ function toRows(items: ChatItem[]): Row[] {
 }
 
 export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
-  const { items, status, send, clear } = useCoach(me.chat.active_turn)
+  const { items, status, send, clear, reload } = useCoach(me.chat.active_turn)
   const [sheet, setSheet] = useState<'open' | 'closing' | null>(
     me.garmin.connected ? null : 'open',
   )
@@ -61,6 +61,13 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
       el.scrollTo({ top: el.scrollHeight, behavior: status === 'streaming' ? 'instant' : 'smooth' })
     }
   }, [items, status])
+
+  // First run: record the phone's time zone so the morning brief lands at local time.
+  useEffect(() => {
+    if (me.settings.timezone_set) return
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+    if (tz) void putSettings({ timezone: tz }).then(onChange).catch(() => {})
+  }, [me.settings.timezone_set]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const closeSheet = () => { setSheet('closing'); setTimeout(() => setSheet(null), 200) }
 
@@ -129,7 +136,7 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
               <button className="modal-close" aria-label="Close" onClick={closeSheet}><X className="size-4" /></button>
             </div>
             <div className="modal-body overflow-y-auto p-4 pb-[max(16px,env(safe-area-inset-bottom))]">
-              <SettingsPanels me={me} onChange={onChange} onClearChat={async () => {
+              <SettingsPanels me={me} onChange={onChange} onDevDone={() => void reload()} onClearChat={async () => {
                 try { await postJSON('/api/chat/clear'); clear() } catch (e) { window.alert((e as Error).message) }
               }} />
               {me.garmin.connected && (

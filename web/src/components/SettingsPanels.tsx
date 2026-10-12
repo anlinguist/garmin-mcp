@@ -163,11 +163,10 @@ export function SettingsPanels({ me, goal, onEditGoal, onChange, onDevDone }: {
         <section className="panel flex flex-col gap-2">
           <h2 className="font-medium">Account</h2>
           <p className="text-sm text-(--text-secondary)">Signed in as {me.profile.name || me.user_id}.</p>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="ghost" onClick={() => void signOut().finally(onChange)}>
-              <LogOut className="mr-1.5 size-3.5" /> Sign out
-            </Button>
-          </div>
+          <Button variant="outline" onClick={() => void signOut().finally(onChange)}
+            className="h-10 w-full border-(--danger) bg-transparent text-(--danger) shadow-none hover:bg-(--danger-subtle) hover:text-(--danger)">
+            <LogOut className="mr-1.5 size-4" /> Sign out
+          </Button>
         </section>
     </div>
   )

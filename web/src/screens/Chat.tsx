@@ -280,7 +280,6 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
             <div className="modal-body overflow-y-auto p-4 pb-[max(16px,env(safe-area-inset-bottom))]">
               <SettingsPanels me={me} goal={goal} onEditGoal={() => open('memory')} onChange={onChange}
                 onDevDone={() => void reload()} />
-              {me.garmin.connected && <Button variant="primary" className="mt-4 w-full" onClick={close}>Done</Button>}
             </div>
           </div>
         </div>

@@ -119,6 +119,7 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
   // Keyboard opens/closes (or anything else resizes the feed): stay pinned to the newest
   // messages if that's where the user was.
   useEffect(() => {
+    atBottom.current = true // a freshly opened chat starts at its newest messages
     const el = feed.current
     if (!el || typeof ResizeObserver === 'undefined') return
     const ro = new ResizeObserver(() => {

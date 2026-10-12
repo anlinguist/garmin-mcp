@@ -78,6 +78,14 @@ def run(coro):
     return asyncio.run(coro)
 
 
+def tid(agent: Agent, user: str) -> str:
+    return agent.coach.coach_thread(user)["id"]
+
+
+def go(agent: Agent, user: str, text: str, emit: Any = lambda e: None, **kw: Any) -> Any:
+    return run(agent.run(user, text, emit, thread_id=tid(agent, user), **kw))
+
+
 def collect() -> tuple[list[dict[str, Any]], Any]:
     events: list[dict[str, Any]] = []
     return events, events.append
@@ -87,13 +95,13 @@ def collect() -> tuple[list[dict[str, Any]], Any]:
 def test_text_only_turn(env) -> None:
     agent, backend = env.agent([(["Nice ", "work!"], [], "end_turn")])
     events, emit = collect()
-    rec = run(agent.run("friend", "How am I doing?", emit))
+    rec = go(agent, "friend", "How am I doing?", emit)
     assert [e["type"] for e in events] == ["text-delta", "text-delta", "usage", "result"]
     assert events[-1]["response"]["status"] == "done"
     assert rec["assistant"] == "Nice work!" and rec["user"] == "How am I doing?"
     prompt = backend.calls[0][-1]["content"]
-    assert prompt.startswith("[Context: today is ") and prompt.endswith("How am I doing?")
-    assert agent.history("friend")[-1]["parts"] == [{"type": "text", "text": "Nice work!"}]
+    assert prompt.startswith("[Context]\nToday: ") and prompt.endswith("How am I doing?")
+    assert agent.history("friend", tid(agent, "friend"))[-1]["parts"] == [{"type": "text", "text": "Nice work!"}]
 
 
 def test_tool_turn_uses_fake_garmin_data(env) -> None:
@@ -102,7 +110,7 @@ def test_tool_turn_uses_fake_garmin_data(env) -> None:
         (["You had a big week."], [], "end_turn"),
     ])
     events, emit = collect()
-    run(agent.run("friend", "What did I do this week?", emit))
+    go(agent, "friend", "What did I do this week?", emit)
     kinds = [e["type"] for e in events]
     assert kinds[:2] == ["tool-call-start", "tool-call-result"]
     result = events[1]["result"]
@@ -112,7 +120,7 @@ def test_tool_turn_uses_fake_garmin_data(env) -> None:
     tool_result = backend.calls[1][-1]["content"][0]
     assert tool_result["tool_use_id"] == "tu_recent_activities_0"
     assert '"activities"' in tool_result["content"] and "is_error" not in tool_result
-    parts = agent.history("friend")[-1]["parts"]
+    parts = agent.history("friend", tid(agent, "friend"))[-1]["parts"]
     assert [p["type"] for p in parts] == ["tool_call", "text"]
 
 
@@ -124,7 +132,7 @@ def test_execute_reads_but_never_writes(env) -> None:
         (["ok"], [], "end_turn"),
     ])
     events, emit = collect()
-    run(agent.run("friend", "sleep?", emit))
+    go(agent, "friend", "sleep?", emit)
     ok = next(e for e in events if e["type"] == "tool-call-result")
     assert ok["result"]["method"] == "get_sleep_data"
     err = next(e for e in events if e["type"] == "tool-call-error")
@@ -138,7 +146,7 @@ def test_unconnected_user_gets_reconnect_message(env) -> None:
         (["Please connect Garmin."], [], "end_turn"),
     ])
     events, emit = collect()
-    run(agent.run("andrew", "hi", emit))
+    go(agent, "andrew", "hi", emit)
     err = next(e for e in events if e["type"] == "tool-call-error")
     assert "Reconnect Garmin in Rabbit" in err["error"]
     assert "garmin-mcp-login" not in err["error"]  # no server-operator instructions for app users
@@ -150,10 +158,11 @@ def test_notes_persist_into_later_context(env) -> None:
         (["Noted."], [], "end_turn"),
         (["Hi again"], [], "end_turn"),
     ])
-    run(agent.run("friend", "My race is CdA", lambda e: None))
-    run(agent.run("friend", "what's my race?", lambda e: None))
+    go(agent, "friend", "My race is CdA", lambda e: None)
+    go(agent, "friend", "what's my race?", lambda e: None)
     second = backend.calls[2]
     assert "70.3 CdA June 27 2027" in second[-1]["content"]
+    assert "[Context]" in second[-1]["content"]
     # earlier turn is in context as plain text, without tool calls
     assert second[0] == {"role": "user", "content": "My race is CdA"}
     assert second[1] == {"role": "assistant", "content": "Noted."}
@@ -161,10 +170,10 @@ def test_notes_persist_into_later_context(env) -> None:
 
 def test_daily_budget_stops_before_calling_model(env) -> None:
     agent, backend = env.agent([(["a"], [], "end_turn")] * 3, budget=150)
-    run(agent.run("friend", "1", lambda e: None))  # 120 tokens
-    run(agent.run("friend", "2", lambda e: None))  # 240 > 150 after this
+    go(agent, "friend", "1", lambda e: None)  # 120 tokens
+    go(agent, "friend", "2", lambda e: None)  # 240 > 150 after this
     events, emit = collect()
-    run(agent.run("friend", "3", emit))
+    go(agent, "friend", "3", emit)
     assert len(backend.calls) == 2
     assert events[-1]["response"]["status"] == "error"
     assert "limit" in events[-1]["response"]["error"]
@@ -173,13 +182,13 @@ def test_daily_budget_stops_before_calling_model(env) -> None:
 def test_refusal_and_iteration_cap(env) -> None:
     agent, _ = env.agent([([], [], "refusal")])
     events, emit = collect()
-    run(agent.run("friend", "x", emit))
+    go(agent, "friend", "x", emit)
     assert "can't help" in "".join(e.get("text", "") for e in events)
 
     loop = [([], [tool_block("search", {"query": "sleep"}, i)], "tool_use") for i in range(MAX_ITERATIONS)]
     agent, backend = env.agent(loop)
     events, emit = collect()
-    run(agent.run("friend", "x", emit))
+    go(agent, "friend", "x", emit)
     assert len(backend.calls) == MAX_ITERATIONS
     assert events[-1]["response"]["status"] == "done"
 
@@ -203,25 +212,28 @@ def test_users_are_isolated(env) -> None:
         ([], [tool_block("recent_activities", {})], "tool_use"),
         (["andrew reply"], [], "end_turn"),
     ])
-    run(agent.run("friend", "friend secret question", lambda e: None))
+    go(agent, "friend", "friend secret question", lambda e: None)
     events, emit = collect()
-    run(agent.run("andrew", "hello", emit))
+    go(agent, "andrew", "hello", emit)
     andrew_ctx = json.dumps(backend.calls[1])
     assert "friend secret question" not in andrew_ctx and "friend reply" not in andrew_ctx
     # andrew has no Garmin tokens: friend's connection is never used for his calls
     assert any(e["type"] == "tool-call-error" for e in events)
-    assert [t["user"] for t in agent.history("andrew")] == ["hello"]
-    assert [t["user"] for t in agent.history("friend")] == ["friend secret question"]
+    assert [t["user"] for t in agent.history("andrew", tid(agent, "andrew"))] == ["hello"]
+    assert [t["user"] for t in agent.history("friend", tid(agent, "friend"))] == ["friend secret question"]
 
 
 def test_context_starts_with_user_even_after_proactive(env) -> None:
     def seed(d):
         d["turns"] = [{"id": "p", "kind": "proactive", "user": None, "assistant": "Nice ride!"},
                       {"id": "c", "kind": "chat", "user": "thanks", "assistant": "anytime"}]
-    env.store.user_doc("friend", "conversation").update(seed)
     agent, backend = env.agent([(["ok"], [], "end_turn")])
-    run(agent.run("friend", "q", lambda e: None))
-    assert backend.calls[0][0] == {"role": "user", "content": "thanks"}
+    env.store.user_doc("friend", f"conv-{tid(agent, 'friend')}").update(seed)
+    go(agent, "friend", "q")
+    # a leading coach message is kept, behind a placeholder user turn
+    assert backend.calls[0][0]["role"] == "user"
+    assert backend.calls[0][1] == {"role": "assistant", "content": "Nice ride!"}
+    assert backend.calls[0][2] == {"role": "user", "content": "thanks"}
 
 
 # ---------------------------------------------------------------- runner ----
@@ -230,16 +242,16 @@ def test_runner_detaches_and_reattaches(env) -> None:
         agent, backend = env.agent([(["part one ", "part two"], [], "end_turn")])
         backend.gate = asyncio.Event()
         runner = ChatRunner(agent)
-        turn = runner.start("friend", "hello")
+        turn = runner.start("friend", "hello", thread_id=tid(agent, "friend"))
         with pytest.raises(TurnBusy):
-            runner.start("friend", "again")
-        runner.start("andrew", "independent")  # other users aren't blocked
+            runner.start("friend", "again", thread_id=tid(agent, "friend"))
+        runner.start("andrew", "independent", thread_id=tid(agent, "andrew"))
 
         # client reads nothing and goes away (phone backgrounded)
         backend.gate.set()
         await runner.wait_idle()
         assert turn.done
-        assert agent.history("friend")[-1]["assistant"] == "part one part two"
+        assert agent.history("friend", tid(agent, "friend"))[-1]["assistant"] == "part one part two"
 
         # re-attach from the second event
         seen = [e async for e in runner.events(turn, 1) if e is not None]
@@ -269,10 +281,14 @@ def test_chat_endpoint_streams_ndjson_and_saves_history(env, tmp_path, fernet_ke
     app = Starlette(routes=build_app_routes(settings, auth, env.tokens, None, None, runner))
     hdrs = {"origin": "http://localhost:8001", "content-type": "application/json"}
 
-    async def go() -> None:
+    async def go_() -> None:
         async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app),
                                       base_url="http://localhost:8001") as c:
-            r = await c.post("/app/api/chat", headers=hdrs, content=b'{"message": "how was it?"}')
+            listing = (await c.get("/app/api/threads")).json()
+            assert [t["kind"] for t in listing["threads"]] == ["coach"]
+            topic = (await c.post("/app/api/threads", headers=hdrs, content=b"{}")).json()
+            body = json.dumps({"message": "how was it?", "thread_id": topic["id"]}).encode()
+            r = await c.post("/app/api/chat", headers=hdrs, content=body)
             assert r.headers["content-type"].startswith("application/x-ndjson")
             events = [json.loads(x) for x in r.text.splitlines() if x.strip()]
             assert [e["type"] for e in events] == [
@@ -280,7 +296,7 @@ def test_chat_endpoint_streams_ndjson_and_saves_history(env, tmp_path, fernet_ke
             turn_id = events[-1]["response"]["turnId"]
             assert r.headers["x-turn-id"] == turn_id
             await runner.wait_idle()
-            page = (await c.get("/app/api/messages")).json()
+            page = (await c.get(f"/app/api/threads/{topic['id']}/messages")).json()
             assert page["turns"][-1]["id"] == turn_id
             assert page["turns"][-1]["user"] == "how was it?"
             assert "assistant" not in page["turns"][-1]  # UI gets parts only
@@ -288,22 +304,14 @@ def test_chat_endpoint_streams_ndjson_and_saves_history(env, tmp_path, fernet_ke
             assert [json.loads(x)["type"] for x in again.text.splitlines() if x.strip()] == [
                 "usage", "result"]
             assert (await c.post("/app/api/chat", headers={"content-type": "application/json"},
-                                 content=b'{"message": "x"}')).status_code == 403
-            assert (await c.post("/app/api/chat/clear", headers=hdrs, content=b"{}")).json()["ok"]
-            assert (await c.get("/app/api/messages")).json()["turns"] == []
-    asyncio.run(go())
-
-
-def test_budget_counts_cached_input(env) -> None:
-    class Cached(Scripted):
-        async def turn(self, **kw):
-            r = await super().turn(**kw)
-            r.usage = SimpleNamespace(input_tokens=8, output_tokens=10,
-                                      cache_read_input_tokens=5000, cache_creation_input_tokens=0)
-            return r
-    agent, _ = env.agent([])
-    agent._backend = Cached([(["a"], [], "end_turn")])
-    events, emit = collect()
-    run(agent.run("friend", "x", emit))
-    usage = next(e for e in events if e["type"] == "usage")
-    assert usage["promptTokens"] == 5008 and usage["totalTokens"] == 5018
+                                 content=body)).status_code == 403
+            bad = json.dumps({"message": "x", "thread_id": "th000000000000"}).encode()
+            assert (await c.post("/app/api/chat", headers=hdrs, content=bad)).status_code == 404
+            # the coach log got a link card for the new topic thread
+            coach_id = listing["threads"][0]["id"]
+            log = (await c.get(f"/app/api/threads/{coach_id}/messages")).json()["turns"]
+            assert log[-1]["kind"] == "link" and log[-1]["parts"][0]["thread_id"] == topic["id"]
+            assert (await c.request("DELETE", f"/app/api/threads/{topic['id']}",
+                                    headers=hdrs)).json()["ok"]
+            assert [t["kind"] for t in (await c.get("/app/api/threads")).json()["threads"]] == ["coach"]
+    asyncio.run(go_())

@@ -28,9 +28,23 @@ AGENT_EXECUTE_DESC = (
 )
 
 NOTES_DESC = (
-    "Replace the athlete notes you keep between conversations (race, date and goal, weekly "
-    "schedule, constraints, injuries, preferences). Rewrite the whole note each time, concise, "
-    "under 2000 characters. Only store durable facts the athlete told you or confirmed."
+    "Replace your coach notes for the current goal: things you've learned this training "
+    "block (how sessions felt, niggles, what works, schedule changes). Rewrite the whole note "
+    "each time, concise, under 2000 characters. Race details belong in save_goal and stable "
+    "facts about the athlete in update_athlete_profile."
+)
+
+PROFILE_DESC = (
+    "Save durable facts about the athlete that hold across goals: experience, units, typical "
+    "weekly hours, usual training days, injuries/limitations, preferences, age. Only fields the "
+    "athlete told you or confirmed; pass just the fields that changed."
+)
+
+GOAL_DESC = (
+    "Save or update the athlete's active goal: title, event, date (YYYY-MM-DD), distance, "
+    "target, priorities. Creates the goal if none is active, otherwise updates it. Don't use "
+    "this to replace their goal with a different race: tell them to start a new goal in "
+    "Settings. Pass just the fields that changed."
 )
 
 AGENT_TOOLS: list[dict] = [
@@ -69,6 +83,37 @@ AGENT_TOOLS: list[dict] = [
                 "args": {"type": "object", "description": "Keyword arguments for the method."},
             },
             "required": ["method"],
+        },
+    },
+    {
+        "name": "update_athlete_profile",
+        "description": PROFILE_DESC,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "experience": {"type": "string"},
+                "units": {"type": "string", "enum": ["metric", "imperial"]},
+                "weekly_hours": {"type": "number"},
+                "age": {"type": "integer"},
+                "training_days": {"type": "string"},
+                "injuries": {"type": "string"},
+                "preferences": {"type": "string"},
+            },
+        },
+    },
+    {
+        "name": "save_goal",
+        "description": GOAL_DESC,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "event": {"type": "string"},
+                "date": {"type": "string", "description": "YYYY-MM-DD"},
+                "distance": {"type": "string"},
+                "target": {"type": "string"},
+                "priorities": {"type": "string"},
+            },
         },
     },
     {

@@ -35,6 +35,7 @@ class Turn:
     id: str
     user_id: str
     created: float
+    thread_id: str = ""
     events: list[dict[str, Any]] = field(default_factory=list)
     done: bool = False
     finished_at: float = 0.0
@@ -82,14 +83,16 @@ class ChatRunner:
         t = self._turns.get(turn_id)
         return t if t is not None and t.user_id == user_id else None
 
-    def start(self, user_id: str, text: str, *, kind: str = "chat") -> Turn:
+    def start(self, user_id: str, text: str, *, thread_id: str, kind: str = "chat",
+              label: str | None = None, attachments: list[dict[str, Any]] | None = None,
+              content_blocks: list[dict[str, Any]] | None = None) -> Turn:
         self._prune()
         running = self.active(user_id)
         if running is not None and not running.done:
             raise TurnBusy(running.id)
         if self._sem is None:
             self._sem = asyncio.Semaphore(self._max)
-        turn = Turn("t_" + secrets.token_urlsafe(9), user_id, time.time())
+        turn = Turn("t" + secrets.token_hex(8), user_id, time.time(), thread_id)
         self._turns[turn.id] = turn
         self._active[user_id] = turn.id
         sem = self._sem
@@ -97,8 +100,10 @@ class ChatRunner:
         async def go() -> None:
             try:
                 async with sem:
-                    turn.record = await self.agent.run(user_id, text, turn.emit,
-                                                       turn_id=turn.id, kind=kind)
+                    turn.record = await self.agent.run(
+                        user_id, text, turn.emit, thread_id=thread_id, turn_id=turn.id,
+                        kind=kind, label=label, attachments=attachments,
+                        content_blocks=content_blocks)
             except Exception as e:  # agent.run handles its own errors; this is a backstop
                 turn.emit({"type": "result", "response": {
                     "status": "error", "turnId": turn.id,

@@ -219,7 +219,10 @@ class AgentDelivery:
             return FireResult(FireOutcome.FAILED)
 
         async def go() -> dict[str, Any] | None:
-            turn = self._runner.start(user_id, prompt, kind="proactive")
+            # Proactive messages land in the active goal's pinned coach thread.
+            thread = self._runner.agent.coach.coach_thread(user_id)
+            turn = self._runner.start(user_id, prompt, thread_id=thread["id"],
+                                      kind="proactive", label=kind)
             return await turn.wait()
         fut = asyncio.run_coroutine_threadsafe(go(), loop)
         try:

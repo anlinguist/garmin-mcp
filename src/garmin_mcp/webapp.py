@@ -23,6 +23,7 @@ from starlette.staticfiles import StaticFiles
 from starlette.types import Scope
 
 from .appstore import AppStore
+from .coaching import CoachError
 from .config import Settings
 from .garminlogin import Busy, Cooldown, LoginManager
 from .logs import log_event
@@ -125,6 +126,8 @@ def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
             "profile": auth.profile(user_id),
             "settings": _settings_view(user_id),
             "dev": {"fake_garmin": fake_garmin, "tools": sorted(dev) if dev else []},
+            "athlete": chat.agent.coach.athlete(user_id) if chat else {},
+            "goal": chat.agent.coach.active_goal(user_id) if chat else None,
             "chat": {"available": chat is not None,
                      "active_turn": (t.id if chat and (t := chat.active(user_id)) else None)},
             "garmin_connected": connected,
@@ -292,13 +295,23 @@ def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
         return StreamingResponse(gen(), media_type="application/x-ndjson",
                                  headers={"X-Accel-Buffering": "no", "X-Turn-Id": turn.id})
 
+    def _coach():
+        assert chat is not None
+        return chat.agent.coach
+
+    def _thread_or_404(user_id: str, thread_id: Any) -> dict[str, Any] | None:
+        return _coach().get_thread(user_id, thread_id) if isinstance(thread_id, str) else None
+
     async def chat_send(request: Request, user_id: str) -> Response:
         if chat is None:
             return _err(503, "Chat isn't configured on this server.")
         body = await read_json(request)
         message = _str(body, "message", 4000).strip()
+        thread = _thread_or_404(user_id, body.get("thread_id"))
+        if thread is None:
+            return _err(404, "thread not found")
         try:
-            turn = chat.start(user_id, message)
+            turn = chat.start(user_id, message, thread_id=thread["id"])
         except TurnBusy as e:
             return JSONResponse({"error": "A reply is already in progress.",
                                  "turn_id": e.turn_id}, status_code=409)
@@ -316,32 +329,131 @@ def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
             start = 0
         return _ndjson(turn, start)
 
+    def _thread_view(t: dict[str, Any]) -> dict[str, Any]:
+        return {k: t.get(k) for k in ("id", "kind", "title", "goal_id", "created", "updated", "seed")}
+
+    async def threads_list(request: Request, user_id: str) -> Response:
+        if chat is None:
+            return JSONResponse({"threads": [], "goal": None})
+        coach = _coach()
+        coach.migrate_legacy(user_id)
+        return JSONResponse({"goal": coach.active_goal(user_id),
+                             "threads": [_thread_view(t) for t in coach.threads(user_id)]})
+
+    async def thread_create(request: Request, user_id: str) -> Response:
+        if chat is None:
+            return _err(503, "Chat isn't configured on this server.")
+        body = await read_json(request)
+        body = body if isinstance(body, dict) else {}
+        seed = body.get("from")
+        if seed is not None and not (isinstance(seed, dict) and isinstance(seed.get("thread_id"), str)
+                                     and isinstance(seed.get("turn_id"), str)):
+            raise ValueError("from")
+        title = body.get("title")
+        try:
+            t = _coach().create_thread(user_id, title=title if isinstance(title, str) else None,
+                                       seed=seed)
+        except CoachError as e:
+            return _err(400, str(e))
+        return JSONResponse(_thread_view(t), status_code=201)
+
+    async def thread_update(request: Request, user_id: str) -> Response:
+        if chat is None:
+            return _err(503, "Chat isn't configured on this server.")
+        body = await read_json(request)
+        try:
+            t = _coach().rename_thread(user_id, request.path_params["thread_id"],
+                                       _str(body, "title", 80))
+        except CoachError as e:
+            return _err(404, str(e))
+        return JSONResponse(_thread_view(t))
+
+    async def thread_delete(request: Request, user_id: str) -> Response:
+        if chat is None:
+            return _err(503, "Chat isn't configured on this server.")
+        thread = _thread_or_404(user_id, request.path_params["thread_id"])
+        if thread is None:
+            return _err(404, "thread not found")
+        active = chat.active(user_id)
+        if active is not None and not active.done and active.thread_id == thread["id"]:
+            return _err(409, "Wait for the current reply to finish.")
+        try:
+            if thread["kind"] == "coach":
+                _coach().clear_thread(user_id, thread["id"])
+            else:
+                _coach().delete_thread(user_id, thread["id"])
+        except CoachError as e:
+            return _err(400, str(e))
+        return JSONResponse({"ok": True})
+
     async def messages(request: Request, user_id: str) -> Response:
         if chat is None:
             return JSONResponse({"turns": []})
+        thread = _thread_or_404(user_id, request.path_params["thread_id"])
+        if thread is None:
+            return _err(404, "thread not found")
         try:
-            limit = min(100, max(1, int(request.query_params.get("limit", "50"))))
+            limit = min(100, max(1, int(request.query_params.get("limit", "60"))))
         except ValueError:
-            limit = 50
-        turns = chat.agent.history(user_id)
+            limit = 60
+        turns = _coach().turns(user_id, thread["id"])
         before = request.query_params.get("before")
         if before:
             idx = next((i for i, t in enumerate(turns) if t.get("id") == before), len(turns))
             turns = turns[:idx]
         page = turns[-limit:]
-        return JSONResponse({
-            "turns": [{k: t.get(k) for k in ("id", "ts", "kind", "user", "parts")} for t in page],
-            "has_more": len(turns) > len(page),
-        })
+        keys = ("id", "ts", "kind", "label", "user", "parts", "attachments", "seed_from")
+        return JSONResponse({"thread": _thread_view(thread),
+                             "turns": [{k: t.get(k) for k in keys if k in t} for t in page],
+                             "has_more": len(turns) > len(page)})
 
-    async def chat_clear(request: Request, user_id: str) -> Response:
+    # ------------------------------------------------------ goal / athlete --
+    async def goals_get(request: Request, user_id: str) -> Response:
+        if chat is None:
+            return JSONResponse({"active": None, "goals": []})
+        return JSONResponse(_coach().goals(user_id))
+
+    async def goal_create(request: Request, user_id: str) -> Response:
         if chat is None:
             return _err(503, "Chat isn't configured on this server.")
-        active = chat.active(user_id)
-        if active is not None and not active.done:
-            return _err(409, "Wait for the current reply to finish.")
-        chat.agent.clear_history(user_id)
+        body = await read_json(request)
+        if not isinstance(body, dict):
+            raise ValueError("body")
+        try:
+            return JSONResponse(_coach().create_goal(user_id, body), status_code=201)
+        except CoachError as e:
+            return _err(400, str(e))
+
+    async def goal_update(request: Request, user_id: str) -> Response:
+        if chat is None:
+            return _err(503, "Chat isn't configured on this server.")
+        body = await read_json(request)
+        if not isinstance(body, dict):
+            raise ValueError("body")
+        try:
+            return JSONResponse(_coach().update_goal(user_id, request.path_params["goal_id"], body))
+        except CoachError as e:
+            return _err(400, str(e))
+
+    async def goal_archive(request: Request, user_id: str) -> Response:
+        if chat is None:
+            return _err(503, "Chat isn't configured on this server.")
+        try:
+            _coach().archive_goal(user_id, request.path_params["goal_id"])
+        except CoachError as e:
+            return _err(404, str(e))
         return JSONResponse({"ok": True})
+
+    async def athlete_put(request: Request, user_id: str) -> Response:
+        if chat is None:
+            return _err(503, "Chat isn't configured on this server.")
+        body = await read_json(request)
+        if not isinstance(body, dict):
+            raise ValueError("body")
+        try:
+            return JSONResponse(_coach().update_athlete(user_id, body))
+        except CoachError as e:
+            return _err(400, str(e))
 
     async def diag_stream(request: Request, user_id: str) -> Response:
         """Phase 0: check NDJSON arrives incrementally through Cloudflare + Caddy."""
@@ -392,10 +504,22 @@ def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
         Route("/app/api/settings", _api(put_settings, mutating=True), methods=["PUT"]),
         Route("/app/api/dev/{name}", _api(dev_action, mutating=True), methods=["POST"]),
         Route("/app/api/chat", _api(chat_send, mutating=True), methods=["POST"]),
-        Route("/app/api/chat/clear", _api(chat_clear, mutating=True), methods=["POST"]),
         Route("/app/api/chat/{turn_id}/events", _api(chat_events, mutating=False),
               methods=["GET"]),
-        Route("/app/api/messages", _api(messages, mutating=False), methods=["GET"]),
+        Route("/app/api/threads", _api(threads_list, mutating=False), methods=["GET"]),
+        Route("/app/api/threads", _api(thread_create, mutating=True), methods=["POST"]),
+        Route("/app/api/threads/{thread_id}", _api(thread_update, mutating=True),
+              methods=["PATCH"]),
+        Route("/app/api/threads/{thread_id}", _api(thread_delete, mutating=True),
+              methods=["DELETE"]),
+        Route("/app/api/threads/{thread_id}/messages", _api(messages, mutating=False),
+              methods=["GET"]),
+        Route("/app/api/goals", _api(goals_get, mutating=False), methods=["GET"]),
+        Route("/app/api/goals", _api(goal_create, mutating=True), methods=["POST"]),
+        Route("/app/api/goals/{goal_id}", _api(goal_update, mutating=True), methods=["PATCH"]),
+        Route("/app/api/goals/{goal_id}/archive", _api(goal_archive, mutating=True),
+              methods=["POST"]),
+        Route("/app/api/athlete", _api(athlete_put, mutating=True), methods=["PUT"]),
         Route("/app/api/garmin/login", _api(garmin_login, mutating=True), methods=["POST"]),
         Route("/app/api/garmin/login/{job_id}", _api(garmin_login_status, mutating=False),
               methods=["GET"]),

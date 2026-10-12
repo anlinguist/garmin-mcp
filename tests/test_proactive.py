@@ -221,8 +221,10 @@ def test_agent_delivery_runs_turn_and_pushes(env) -> None:
         res = deliver("friend", "workout", "New activity ...")
         assert res.outcome is FireOutcome.OK
         assert pushes == [("friend", "Rabbit", "Strong tempo. Easy spin tomorrow.")]
-        turn = agent.history("friend")[-1]
+        coach = agent.coach.coach_thread("friend")
+        turn = agent.history("friend", coach["id"])[-1]
         assert turn["kind"] == "proactive" and turn["user"] is None
+        assert turn["label"] == "workout"  # lands in the pinned coach log
 
         # no text produced (e.g. model unreachable): nothing delivered, retry later
         assert deliver("friend", "brief", "brief").outcome is FireOutcome.FAILED

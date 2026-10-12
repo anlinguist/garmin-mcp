@@ -5,6 +5,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
 source infra/config.env
+# shellcheck disable=SC1091
+source infra/gcloud-python.sh
 CID="$1" USERS="$2" VAPID="$3"
 gcloud compute ssh "$VM_NAME" --project "$PROJECT" --zone "$ZONE" --tunnel-through-iap --command "sudo bash -euo pipefail -c '
   f=/etc/rabbit/env

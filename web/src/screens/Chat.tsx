@@ -21,6 +21,7 @@ import { ApprovalCard } from '@/components/chat/ApprovalCard'
 import { Chart } from '@/components/chat/Chart'
 import { MessageMenu, type MenuTarget } from '@/components/chat/MessageMenu'
 import { useLongPress } from '@/hooks/useLongPress'
+import { hapticTap } from '@/lib/haptics'
 
 const COACH_SUGGESTIONS = [
   'How did my training go this week?',
@@ -170,7 +171,7 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
     const id = el.dataset.msgId
     const item = items.find((it): it is ChatMessage => it.kind === 'message' && it.id === id)
     if (!item || item.error) return
-    navigator.vibrate?.(10)
+    hapticTap()
     setMenu({ item, el, canDiscuss: isCoach && item.turnKind === 'proactive' && !!item.turnId })
   })
 

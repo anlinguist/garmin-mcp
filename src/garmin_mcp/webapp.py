@@ -532,16 +532,6 @@ def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
         except CoachError as e:
             return _err(400, str(e))
 
-    async def diag_stream(request: Request, user_id: str) -> Response:
-        """Phase 0: check NDJSON arrives incrementally through Cloudflare + Caddy."""
-        async def gen() -> AsyncIterator[bytes]:
-            for i in range(10):
-                yield (json.dumps({"type": "tick", "n": i}) + "\n").encode()
-                await anyio.sleep(0.5)
-            yield (json.dumps({"type": "done"}) + "\n").encode()
-        return StreamingResponse(gen(), media_type="application/x-ndjson",
-                                 headers={"X-Accel-Buffering": "no"})
-
     # --------------------------------------------------------------- auth --
     async def google_start(request: Request) -> Response:
         if not host_ok(request):
@@ -577,7 +567,6 @@ def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
         Route("/app/api/push/unsubscribe", _api(push_unsubscribe, mutating=True),
               methods=["POST"]),
         Route("/app/api/push/test", _api(push_test, mutating=True), methods=["POST"]),
-        Route("/app/api/diag/stream", _api(diag_stream, mutating=True), methods=["POST"]),
         Route("/app/api/settings", _api(put_settings, mutating=True), methods=["PUT"]),
         Route("/app/api/dev/{name}", _api(dev_action, mutating=True), methods=["POST"]),
         Route("/app/api/chat", _api(chat_send, mutating=True), methods=["POST"]),

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Bell, LogOut, Radio, Target, Watch } from 'lucide-react'
+import { Bell, LogOut, Target, Watch } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { CoachingSettings } from '@/components/CoachingSettings'
 import { ConnectGarmin } from '@/components/ConnectGarmin'
-import { goalCountdown, postJSON, postStream, signOut, type Goal, type Me } from '@/lib/api'
+import { goalCountdown, postJSON, signOut, type Goal, type Me } from '@/lib/api'
 import { disablePush, enablePush, isStandalone, pushSupported, sendTestPush, thisDeviceSubscribed } from '@/lib/push'
 
 // Settings sheet content: Garmin connection, notifications, device checks, account.
@@ -24,7 +24,6 @@ export function SettingsPanels({ me, goal, onEditGoal, onChange, onDevDone }: {
     catch (e) { setPushMsg((e as Error).message) } finally { setBusy(false) }
   }
   const [busy, setBusy] = useState(false)
-  const [ticks, setTicks] = useState<string[]>([])
 
   async function onDisconnect() {
     if (!window.confirm('Disconnect Garmin? Rabbit will stop seeing your training data until you connect again.')) return
@@ -61,25 +60,6 @@ export function SettingsPanels({ me, goal, onEditGoal, onChange, onDevDone }: {
     }
   }
 
-  async function onStreamTest() {
-    setTicks([])
-    const start = performance.now()
-    const r = await postStream('/api/diag/stream')
-    const reader = r.body!.getReader()
-    const dec = new TextDecoder()
-    let buf = ''
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buf += dec.decode(value, { stream: true })
-      let i
-      while ((i = buf.indexOf('\n')) >= 0) {
-        const line = buf.slice(0, i).trim()
-        buf = buf.slice(i + 1)
-        if (line) setTicks((t) => [...t, `${((performance.now() - start) / 1000).toFixed(1)}s  ${line}`])
-      }
-    }
-  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -147,19 +127,6 @@ export function SettingsPanels({ me, goal, onEditGoal, onChange, onDevDone }: {
           {pushMsg && <p className="text-xs text-(--text-muted)">{pushMsg}</p>}
         </section>
 
-        <section className="panel flex flex-col gap-3">
-          <div className="flex items-start gap-3">
-            <Radio className="mt-0.5 size-5 text-(--accent)" />
-            <div>
-              <h2 className="font-medium">Streaming check</h2>
-              <p className="text-sm text-(--text-secondary)">Lines should arrive about every 0.5s, not all at once.</p>
-            </div>
-          </div>
-          <Button className="self-start" onClick={() => void onStreamTest()}>Run</Button>
-          {ticks.length > 0 && (
-            <pre className="max-h-48 overflow-auto rounded-(--radius) bg-(--bg-inset) p-2 text-[11px]">{ticks.join('\n')}</pre>
-          )}
-        </section>
         <section className="panel flex flex-col gap-2">
           <h2 className="font-medium">Account</h2>
           <p className="text-sm text-(--text-secondary)">Signed in as {me.profile.name || me.user_id}.</p>

@@ -65,14 +65,6 @@ export async function postJSON<T>(path: string, body: unknown = {}): Promise<T> 
   })).json() as Promise<T>
 }
 
-export async function postStream(path: string, body: unknown = {}): Promise<Response> {
-  return request(path, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-}
-
 export const getMe = () => getJSON<Me>('/api/me')
 export const signOut = () => postJSON('/auth/logout')
 

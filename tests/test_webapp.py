@@ -276,16 +276,6 @@ async def test_oversized_body_rejected(h: Harness) -> None:
         assert r.status_code == 400
 
 
-@run
-async def test_diag_stream_is_ndjson(h: Harness) -> None:
-    async with h.client() as c:
-        await sign_in(h, c)
-        r = await c.post("/app/api/diag/stream", headers=JSON_HDRS, content=b"{}")
-        assert r.headers["content-type"].startswith("application/x-ndjson")
-        lines = [json.loads(x) for x in r.text.splitlines() if x]
-        assert lines[-1] == {"type": "done"} and len(lines) == 11
-
-
 # -------------------------------------------------------------------- push --
 def _browser_subscription(endpoint: str) -> tuple[dict[str, Any], ec.EllipticCurvePrivateKey, bytes]:
     key = ec.generate_private_key(ec.SECP256R1())

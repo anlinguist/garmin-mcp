@@ -257,9 +257,12 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
       {/* With the week card pinned under it, the card itself separates header and feed. */}
       <header className={`flex shrink-0 items-center gap-2 px-3 pb-2.5 pt-[max(10px,env(safe-area-inset-top))] ${showPins ? '' : 'border-b border-(--border)'}`}>
         {/* Rabbit + your goal: home, i.e. the coach log */}
-        <button className="flex min-w-0 flex-1 items-center gap-2 pl-1 text-left" aria-label="Coach log"
+        <button className="flex min-w-0 flex-1 items-center gap-2.5 text-left" aria-label="Coach log"
           onClick={() => { if (coachId) openThread(coachId) }}>
-          <RabbitLogo size={24} thinking={status === 'streaming'} className="shrink-0" />
+          {/* App-icon tile, like the Home Screen icon (hops while Rabbit is replying) */}
+          <span className="flex size-[38px] shrink-0 items-center justify-center rounded-[11px] bg-(--brand) text-(--bg) shadow-sm">
+            <RabbitLogo size={32} thinking={status === 'streaming'} />
+          </span>
           <span className="min-w-0">
             <span className="block truncate font-display text-lg leading-tight text-(--brand)">
               {pending ? 'New chat' : isCoach || !thread ? 'Rabbit' : thread.title || 'New chat'}

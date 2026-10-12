@@ -169,3 +169,44 @@ def test_save_plan_tool_accepts_dates(env) -> None:
     go(agent, "friend", "here's my plan")
     g = agent.coach.active_goal("friend")
     assert (g["plan_start"], g["plan_weeks"]) == ("2026-09-28", 39)
+
+
+def test_to_imperial() -> None:
+    from garmin_mcp.agent import to_imperial
+    run = to_imperial({"sport": "running", "distance_km": 3.3, "avg_pace_per_km": "7:39",
+                       "elevation_gain_m": 30})
+    assert run == {"sport": "running", "distance_mi": 2.05, "avg_pace_per_mi": "12:19",
+                   "elevation_gain_ft": 98}
+    assert to_imperial({"avg_speed_kmh": 20.4})["avg_speed_mph"] == 12.7
+
+
+def test_imperial_athlete_gets_miles_from_recent_activities(env) -> None:
+    agent, backend = env.agent([
+        ([], [tool_block("recent_activities", {"days": 30})], "tool_use"), (["ok"], [], "end_turn")])
+    agent.coach.update_athlete("friend", {"units": "imperial"})
+    go(agent, "friend", "what did I do?")
+    sent = str(backend.calls[1][-1]["content"])
+    assert "distance_mi" in sent and "distance_km" not in sent
+
+
+def test_todays_plan_reaches_the_context(env) -> None:
+    agent, backend = env.agent([(["Rest up."], [], "end_turn")])
+    agent.coach.create_goal("friend", {"title": "70.3"})
+    agent.coach.set_plan("friend", "Mon rest")
+    today = agent._now("friend").date()
+    start = date.fromisoformat(plan_week(agent.coach.active_goal("friend"), today)["start"])
+    args = {"days": [{"date": (start + timedelta(days=i)).isoformat(), "sessions": []} for i in range(7)]}
+    args["days"][(today - start).days]["sessions"] = [{"sport": "rest", "title": "Rest day"}]
+    backend.steps.insert(0, ([], [tool_block("save_week", args)], "tool_use"))
+    asyncio.run(agent.planner.ensure("friend"))  # what a brief does first
+    go(agent, "friend", "what should I do today?")
+    ctx = backend.calls[-1][-1]["content"]
+    assert f"Today ({today:%A}) in their plan: Rest day." in ctx
+
+
+def test_context_says_when_plan_days_arent_loaded(env) -> None:
+    agent, backend = env.agent([(["ok"], [], "end_turn")])
+    agent.coach.create_goal("friend", {"title": "70.3"})
+    agent.coach.set_plan("friend", "plan")
+    go(agent, "friend", "hi")
+    assert "Today's planned sessions aren't loaded." in backend.calls[0][-1]["content"]

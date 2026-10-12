@@ -32,7 +32,6 @@ from .tokens import TokenStore, TokenStoreError
 from .webauth import WebAuth
 from .webchat import ChatRunner, Turn, TurnBusy
 from .webpush import WebPush, parse_subscription
-from .weekplan import WeekPlanner
 
 logger = logging.getLogger(__name__)
 
@@ -486,7 +485,7 @@ def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
                              "turns": [{k: t.get(k) for k in keys if k in t} for t in page],
                              "has_more": len(turns) > len(page)})
 
-    planner = WeekPlanner(chat.agent) if chat is not None else None
+    planner = chat.agent.planner if chat is not None else None
 
     async def plan_week_get(request: Request, user_id: str) -> Response:
         if planner is None:

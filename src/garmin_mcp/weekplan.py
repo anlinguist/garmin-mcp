@@ -19,15 +19,17 @@ import json
 import logging
 import time
 from datetime import date, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import anyio
 
-from .agent import Agent
 from .attachments import AttachmentError
 from .coaching import plan_week, training_phase
 from .logs import log_event
 from .providers import GarminError, ReauthRequired
+
+if TYPE_CHECKING:
+    from .agent import Agent
 
 logger = logging.getLogger(__name__)
 
@@ -181,7 +183,7 @@ def merge(start: date, today: date, planned: dict[str, list[dict[str, Any]]] | N
 
 
 class WeekPlanner:
-    def __init__(self, agent: Agent, *, clock: Any = time.time) -> None:
+    def __init__(self, agent: "Agent", *, clock: Any = time.time) -> None:
         self._agent = agent
         self._clock = clock
         self._locks: dict[str, asyncio.Lock] = {}
@@ -195,6 +197,22 @@ class WeekPlanner:
         basis = json.dumps([goal.get("plan"), [f["id"] for f in goal.get("plan_files", [])],
                             goal.get("plan_start"), goal.get("plan_weeks"), goal.get("date")])
         return hashlib.sha256(basis.encode()).hexdigest()[:16]
+
+    def cached_days(self, user_id: str, goal: dict[str, Any], today: date
+                    ) -> tuple[dict[str, Any], dict[str, Any] | None]:
+        """(plan week, cached planned week or None). Never calls the model."""
+        pw = plan_week(goal, today)
+        key = f"{goal['id']}:{pw['start']}:{self._version(goal)}"
+        return pw, self._doc(user_id).load().get("weeks", {}).get(key)
+
+    async def ensure(self, user_id: str) -> None:
+        """Make sure this week's planned sessions are cached (before a brief or workout
+        note, so the agent knows what today was meant to be)."""
+        goal = self._agent.coach.active_goal(user_id)
+        if goal and goal.get("plan"):
+            today = self._agent._now(user_id).date()
+            pw = plan_week(goal, today)
+            await self._planned(user_id, goal, date.fromisoformat(pw["start"]), pw)
 
     async def week(self, user_id: str) -> dict[str, Any]:
         agent = self._agent

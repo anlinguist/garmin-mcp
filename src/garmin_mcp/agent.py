@@ -25,7 +25,7 @@ import secrets
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Protocol
 from zoneinfo import ZoneInfo
 
@@ -38,6 +38,7 @@ from .logs import log_event
 from .providers import GarminError, ReauthRequired
 from .toolspec import AGENT_TOOLS
 from .tools import GarminService
+from .weekplan import WeekPlanner
 
 logger = logging.getLogger(__name__)
 
@@ -58,14 +59,21 @@ How to work:
 garminconnect method, then execute it. Dates are YYYY-MM-DD; "today" is in the context line.
 - Ground every number in tool results. If data is missing or a call fails, say so plainly \
 instead of guessing.
-- Write for a phone: lead with the answer, then a few short sentences or a short list. Use \
-the athlete's units if you know them, otherwise metric. No tables wider than three columns.
+- Write for a phone: lead with the answer, then a few short sentences or a short list. No \
+tables wider than three columns.
+- Units: use the athlete's units from the [Context] block everywhere, including your notes. \
+For imperial, recent_activities already gives miles, min/mi, mph and feet; convert anything \
+else from metric (1 km = 0.621 mi) and never quote km to an imperial athlete.
 - Be encouraging and specific. Connect today's data to their goal race and recent load \
 when it helps.
 - You are not a doctor. For pain, injury, illness or anything alarming, suggest easing off \
 and seeing a professional.
 - The [Context] block has today's date, the athlete profile, their active goal (with weeks to \
 race and the rough training phase) and your coach notes. Scope advice to that goal and phase.
+- When the context lists today's planned sessions, that is the plan: build suggestions around \
+it. On a planned rest day, say it's a rest day and don't suggest a workout (easy mobility at \
+most). Suggest changing the plan only when their data gives a reason, and say what it is. If \
+today's sessions aren't listed, check the plan (read_file) before prescribing a workout.
 - Keep memory current: save_goal for race details, save_plan for their training plan, \
 update_athlete_profile for stable facts about the athlete, update_notes for what you learn \
 during this block. Only save what they told you or confirmed, and say in one short line what \
@@ -225,6 +233,40 @@ def _with_weekdays(out: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+_KM_MI = 0.621371
+
+
+def _per_km_to_per_mi(pace: str) -> str | None:
+    try:
+        parts = [int(p) for p in pace.split(":")]
+    except (AttributeError, ValueError):
+        return None
+    secs = 0
+    for p in parts:
+        secs = secs * 60 + p
+    secs = round(secs / _KM_MI)
+    h, rem = divmod(secs, 3600)
+    m, s = divmod(rem, 60)
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+
+
+def to_imperial(a: dict[str, Any]) -> dict[str, Any]:
+    """Compact activity with distances in miles, run pace per mile, speed in mph and
+    elevation in feet, so the model never has to convert (or forget to)."""
+    out = dict(a)
+    if isinstance(out.get("distance_km"), int | float):
+        out["distance_mi"] = round(out.pop("distance_km") * _KM_MI, 2)
+    if out.get("avg_pace_per_km"):
+        pace = _per_km_to_per_mi(out.pop("avg_pace_per_km"))
+        if pace:
+            out["avg_pace_per_mi"] = pace
+    if isinstance(out.get("avg_speed_kmh"), int | float):
+        out["avg_speed_mph"] = round(out.pop("avg_speed_kmh") * _KM_MI, 1)
+    if isinstance(out.get("elevation_gain_m"), int | float):
+        out["elevation_gain_ft"] = round(out.pop("elevation_gain_m") * 3.28084)
+    return out
+
+
 def _clip(obj: Any, limit: int) -> Any:
     s = json.dumps(obj, separators=(",", ":"), default=str)
     if len(s) <= limit:
@@ -246,6 +288,7 @@ class Agent:
         self._budget = daily_token_budget
         self._tz = default_timezone
         self._clock = clock
+        self.planner = WeekPlanner(self, clock=clock)
 
     # --------------------------------------------------------- user state --
     def _profile(self, user_id: str) -> dict[str, Any]:
@@ -282,6 +325,26 @@ class Agent:
                 msgs.append({"role": "assistant", "content": t["assistant"]})
         return msgs
 
+    def _plan_days(self, user_id: str, now: datetime) -> list[str]:
+        """Today's and tomorrow's planned sessions, from the cached week plan."""
+        goal = self.coach.active_goal(user_id)
+        if not goal or not goal.get("plan"):
+            return []
+        lines = []
+        for offset, label in ((0, "Today"), (1, "Tomorrow")):
+            day = now.date() + timedelta(days=offset)
+            _, week = self.planner.cached_days(user_id, goal, day)
+            if week is None:
+                if offset == 0:
+                    lines.append("Today's planned sessions aren't loaded.")
+                break
+            sessions = week["days"].get(day.isoformat(), [])
+            desc = "; ".join(
+                s["title"] + (f" ({s['minutes']} min)" if s.get("minutes") else "")
+                + (f": {s['detail']}" if s.get("detail") else "") for s in sessions)
+            lines.append(f"{label} ({day:%A}) in their plan: {desc or 'nothing scheduled'}.")
+        return lines
+
     def _used_today(self, user_id: str, day: str) -> int:
         u = self._store.user_doc(user_id, "usage").load()
         return int(u.get("tokens", 0)) if u.get("day") == day else 0
@@ -305,7 +368,10 @@ class Agent:
             out = self._service.recent_activities(
                 user_id, int(days) if isinstance(days, int | float) else 7,
                 sport if isinstance(sport, str) and sport.strip() else None)
-            return _with_weekdays(out)
+            out = _with_weekdays(out)
+            if self.coach.athlete(user_id).get("units") == "imperial":
+                out["activities"] = [to_imperial(a) for a in out.get("activities", [])]
+            return out
         if name == "search":
             query = args.get("query")
             limit = args.get("limit", 8)
@@ -455,7 +521,8 @@ class Agent:
             return finish("error", "You've reached today's chat limit. It resets tomorrow.")
 
         thread = self.coach.get_thread(user_id, thread_id)
-        prompt = self.coach.context_block(user_id, now, thread) + (user_text or text)
+        prompt = self.coach.context_block(user_id, now, thread,
+                                          plan_days=self._plan_days(user_id, now)) + (user_text or text)
         if attachments:  # lets the model link plan files via save_plan
             prompt += "\n[Attached this turn: " + ", ".join(
                 f"{a['name']} (id {a['id']})" for a in attachments) + "]"

@@ -426,7 +426,9 @@ class CoachStore:
         legacy.delete()
 
     # --------------------------------------------------------- context -----
-    def context_block(self, user_id: str, now: datetime, thread: dict[str, Any] | None) -> str:
+    def context_block(self, user_id: str, now: datetime, thread: dict[str, Any] | None, *,
+                      plan_days: list[str] | None = None) -> str:
+        """``plan_days``: lines about today's (and tomorrow's) planned sessions."""
         lines = [f"Today: {now:%A %Y-%m-%d}, {now:%H:%M} local time ({now.tzname()})."]
         a = {k: v for k, v in self.athlete(user_id).items() if v not in (None, "")}
         lines.append("Athlete profile: " + (
@@ -450,6 +452,7 @@ class CoachStore:
                     plan = plan[:PLAN_CONTEXT_CHARS] + " ...[truncated]"
                 lines.append(f"Their training plan (your summary of what they shared): {plan}")
                 pw = plan_week(g, now.date())
+                lines.extend(plan_days or [])
                 if pw["index"] is not None:
                     lines.append(f"This is week {pw['index']}" + (f" of {pw['weeks']}" if pw["weeks"] else "")
                                  + f" of the plan ({pw['start']} to {pw['end']}).")

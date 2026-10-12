@@ -47,14 +47,15 @@ WORKOUT_PROMPT = (
     "A new activity just synced from Garmin (id | sport | start | duration | distance):\n"
     "{lines}\n\n"
     "Write a short note to the athlete about it: 2-4 sentences. Say what stood out "
-    "(pace, power, HR, effort vs. what the session was for), and give one practical "
-    "suggestion for the next day or two. Look up details or recent load/HRV with tools "
+    "(pace, power, HR, effort vs. what today's planned session was for), and give one "
+    "practical note about the next day or two of their plan. Look up details or recent load/HRV with tools "
     "if that helps. Don't open with a greeting. This will be sent as a phone notification."
 )
 BRIEF_PROMPT = (
-    "Write this morning's brief for the athlete. Check last night's sleep, HRV and "
-    "training readiness, and yesterday's training if any. Then give one clear "
-    "suggestion for today. Under 120 words, a heading-free short paragraph or 3 bullets. "
+    "Write this morning's brief for the athlete. Start from today's planned session in the "
+    "context (a rest day is a rest day: say so, no workout). Check last night's sleep, HRV and "
+    "training readiness, and yesterday's training if any, and say whether to do today's "
+    "session as planned or ease it, and why. Under 120 words, a heading-free short paragraph or 3 bullets. "
     "Don't open with a greeting. This will be sent as a phone notification."
 )
 
@@ -220,7 +221,13 @@ class AgentDelivery:
 
         async def go() -> dict[str, Any] | None:
             # Proactive messages land in the active goal's pinned coach thread.
-            thread = self._runner.agent.coach.coach_thread(user_id)
+            agent = self._runner.agent
+            try:  # know today's planned session before writing (cached; about once a week)
+                await asyncio.wait_for(agent.planner.ensure(user_id), timeout=60)
+            except Exception as e:
+                log_event(logger, logging.WARNING, "proactive_plan_unavailable", user_id=user_id,
+                          error=type(e).__name__)
+            thread = agent.coach.coach_thread(user_id)
             turn = self._runner.start(user_id, prompt, thread_id=thread["id"],
                                       kind="proactive", label=kind)
             return await turn.wait()

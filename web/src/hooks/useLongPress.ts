@@ -33,6 +33,12 @@ export function useLongPress(onTrigger: (el: HTMLElement) => void) {
     // Lock selection page-wide right away (before the finger lifts); MessageMenu removes it.
     document.documentElement.classList.add('msg-menu-open')
     document.getSelection()?.removeAllRanges()
+    // Safety: if no menu actually opened (e.g. an error bubble), don't leave the page locked.
+    window.setTimeout(() => {
+      if (!document.querySelector('.msg-menu, .modal-body.selectable')) {
+        document.documentElement.classList.remove('msg-menu-open')
+      }
+    }, 2000)
     settleUntil.current = performance.now() + 1500 // swallow the rest of the native gesture
     trigger.current(el)
   }, [cancel])

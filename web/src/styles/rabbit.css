@@ -10,6 +10,9 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 }
 /* Conversation text reads like iMessage: the proportional system font, not DM Mono. */
 .chat-text, .chat-text .prose { font-family: var(--font); letter-spacing: normal; }
+/* Settings: system font like iOS Settings; section labels stay in DM Mono. */
+.settings { font-family: var(--font); letter-spacing: normal; }
+.settings-group > * + * { border-top: 1px solid var(--border); }
 
 /* Rabbit-specific additions on top of Dolly's globals. */
 html, body, #root { height: 100%; }

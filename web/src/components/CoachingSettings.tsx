@@ -1,22 +1,7 @@
 import { useState } from 'react'
-import { MessageCircleHeart, FlaskConical } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Clock, FlaskConical, Sunrise, Watch } from 'lucide-react'
+import { Group, Icon, Row, Switch } from '@/components/settings/Grouped'
 import { postJSON, putSettings, type CoachSettings, type Me } from '@/lib/api'
-
-function Toggle({ checked, onChange, label, hint }: {
-  checked: boolean; onChange: (v: boolean) => void; label: string; hint: string
-}) {
-  return (
-    <label className="flex cursor-pointer items-start justify-between gap-3 py-1">
-      <span>
-        <span className="block text-sm">{label}</span>
-        <span className="block text-xs text-(--text-muted)">{hint}</span>
-      </span>
-      <input type="checkbox" className="mt-1 size-5 shrink-0 accent-(--accent)"
-        checked={checked} onChange={(e) => onChange(e.target.checked)} />
-    </label>
-  )
-}
 
 export function CoachingSettings({ me, onChange, onDevDone }: {
   me: Me; onChange: () => void; onDevDone: () => void
@@ -45,44 +30,36 @@ export function CoachingSettings({ me, onChange, onDevDone }: {
     }
   }
 
+  const tz = s.timezone.split('/').pop()?.replace(/_/g, ' ') ?? s.timezone
+
   return (
-    <section className="panel flex flex-col gap-2">
-      <div className="flex items-start gap-3">
-        <MessageCircleHeart className="mt-0.5 size-5 text-(--accent)" />
-        <div>
-          <h2 className="font-medium">Coaching messages</h2>
-          <p className="text-sm text-(--text-secondary)">Rabbit can message you first. These arrive as notifications.</p>
-        </div>
-      </div>
-      <Toggle checked={s.workout_feedback} onChange={(v) => void save({ workout_feedback: v })}
-        label="Workout feedback" hint="A short note after each new activity syncs from Garmin." />
-      <Toggle checked={s.brief_enabled} onChange={(v) => void save({ brief_enabled: v })}
-        label="Morning brief" hint="Sleep, recovery and a suggestion for the day." />
-      {s.brief_enabled && (
-        <label className="flex items-center justify-between gap-3 py-1 text-sm">
-          Brief time
-          <input type="time" value={s.brief_time} step={300}
-            onChange={(e) => e.target.value && void save({ brief_time: e.target.value })}
-            className="rounded-md border border-(--border-strong) bg-transparent px-2 py-1 text-base" />
-        </label>
-      )}
-      <p className="text-xs text-(--text-muted)">Time zone: {s.timezone}</p>
+    <>
+      <Group label="Coaching messages"
+        footer={`Rabbit can message you first; these arrive as notifications. Times are ${tz} time.`}>
+        <Row icon={<Icon><Watch /></Icon>} title="Workout feedback" subtitle="A short note after each new activity"
+          trailing={<Switch label="Workout feedback" checked={s.workout_feedback} onChange={(v) => void save({ workout_feedback: v })} />} />
+        <Row icon={<Icon><Sunrise /></Icon>} title="Morning brief" subtitle="Today's plan, sleep and recovery"
+          trailing={<Switch label="Morning brief" checked={s.brief_enabled} onChange={(v) => void save({ brief_enabled: v })} />} />
+        {s.brief_enabled && (
+          <Row icon={<Icon><Clock /></Icon>} title="Brief time"
+            trailing={<input type="time" value={s.brief_time} step={300} aria-label="Brief time"
+              onChange={(e) => e.target.value && void save({ brief_time: e.target.value })}
+              className="rounded-lg bg-(--bg-inset) px-2.5 py-1 text-right text-[0.9412rem] text-(--text) [font-family:var(--font)]" />} />
+        )}
+      </Group>
       {me.dev.tools.length > 0 && (
-        <div className="mt-2 flex flex-col gap-2 rounded-(--radius) border border-dashed border-(--warning)/40 p-2">
-          <span className="flex items-center gap-1.5 text-[0.6471rem] font-semibold uppercase tracking-widest text-(--warning)">
-            <FlaskConical className="size-3.5" /> Dev (fake Garmin)
-          </span>
-          <div className="flex flex-wrap gap-2">
-            {me.dev.tools.includes('simulate_workout') && (
-              <Button disabled={busy} onClick={() => void dev('simulate_workout', 'Simulated workout')}>Simulate new workout</Button>
-            )}
-            {me.dev.tools.includes('brief_now') && (
-              <Button disabled={busy} onClick={() => void dev('brief_now', 'Morning brief')}>Send brief now</Button>
-            )}
-          </div>
-        </div>
+        <Group label="Dev (fake Garmin)">
+          {me.dev.tools.includes('simulate_workout') && (
+            <Row icon={<Icon tone="muted"><FlaskConical /></Icon>} title="Simulate new workout" disabled={busy}
+              onClick={() => void dev('simulate_workout', 'Simulated workout')} />
+          )}
+          {me.dev.tools.includes('brief_now') && (
+            <Row icon={<Icon tone="muted"><FlaskConical /></Icon>} title="Send brief now" disabled={busy}
+              onClick={() => void dev('brief_now', 'Morning brief')} />
+          )}
+        </Group>
       )}
-      {msg && <p className="break-words text-xs text-(--text-muted)">{msg}</p>}
-    </section>
+      {msg && <p className="-mt-4 break-words px-4 text-[0.7647rem] text-(--text-muted)">{msg}</p>}
+    </>
   )
 }

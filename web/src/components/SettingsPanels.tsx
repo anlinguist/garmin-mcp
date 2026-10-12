@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Bell, LogOut, Target, Watch } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Avatar } from '@/components/Avatar'
+import { Group, Icon, Row, Switch } from '@/components/settings/Grouped'
 import { CoachingSettings } from '@/components/CoachingSettings'
 import { ConnectGarmin } from '@/components/ConnectGarmin'
 import { goalCountdown, postJSON, signOut, type Goal, type Me } from '@/lib/api'
@@ -20,7 +21,7 @@ export function SettingsPanels({ me, goal, onEditGoal, onChange, onDevDone }: {
 
   async function onDisablePush() {
     setBusy(true)
-    try { await disablePush(); setHere(false); setPushMsg('Notifications off on this device.'); onChange() }
+    try { await disablePush(); setHere(false); setPushMsg(null); onChange() }
     catch (e) { setPushMsg((e as Error).message) } finally { setBusy(false) }
   }
   const [busy, setBusy] = useState(false)
@@ -37,7 +38,7 @@ export function SettingsPanels({ me, goal, onEditGoal, onChange, onDevDone }: {
     try {
       const n = await enablePush(me.push.public_key)
       setHere(true)
-      setPushMsg(`Notifications on (${n} device${n === 1 ? '' : 's'}).`)
+      setPushMsg(n > 1 ? `On for ${n} devices.` : null)
       onChange()
     } catch (e) {
       setPushMsg((e as Error).message)
@@ -51,7 +52,8 @@ export function SettingsPanels({ me, goal, onEditGoal, onChange, onDevDone }: {
     try {
       const r = await sendTestPush()
       setPushMsg(r.results.length
-        ? r.results.map((x) => `${x.host}: ${x.status ?? 'error'}${x.removed ? ' (removed)' : ''}`).join(', ')
+        ? (r.results.every((x) => x.status && x.status < 300) ? 'Test sent. It should arrive in a few seconds.'
+          : r.results.map((x) => `${x.host}: ${x.status ?? 'error'}${x.removed ? ' (removed)' : ''}`).join(', '))
         : 'No devices subscribed.')
     } catch (e) {
       setPushMsg((e as Error).message)
@@ -61,80 +63,65 @@ export function SettingsPanels({ me, goal, onEditGoal, onChange, onDevDone }: {
   }
 
 
+  const pushStatus = !me.push.available ? 'Not configured on the server.'
+    : !pushSupported() ? (isStandalone() ? 'Not supported on this device.' : 'Open Rabbit from your Home Screen to turn these on.')
+    : here ? `On for this device${me.push.subscriptions > 1 ? ` and ${me.push.subscriptions - 1} other` : ''}`
+    : me.push.subscriptions ? `Off here, on for ${me.push.subscriptions} other device${me.push.subscriptions === 1 ? '' : 's'}` : 'Off'
+  const canToggle = me.push.available && pushSupported() && here !== null
+  const countdown = goalCountdown(goal)
+
   return (
-    <div className="flex flex-col gap-4">
-        <section className="panel flex items-start gap-3">
-          <Target className="mt-0.5 size-5 text-(--accent)" />
-          <div className="min-w-0 flex-1">
-            <h2 className="font-medium">Goal</h2>
-            <p className="truncate text-sm text-(--text-secondary)">
-              {goal ? `${goal.title}${goalCountdown(goal) ? ` · ${goalCountdown(goal)}` : ''}` : 'Not set yet'}
-            </p>
-          </div>
-          <Button onClick={onEditGoal}>What Rabbit knows</Button>
-        </section>
-        <section className="panel flex flex-col gap-3">
-          <div className="flex items-start gap-3">
-            <Watch className="mt-0.5 size-5 text-(--accent)" />
-            <div className="flex-1">
-              <h2 className="font-medium">Garmin</h2>
-              <p className="text-sm text-(--text-secondary)">
-                {me.garmin.connected ? 'Connected. Rabbit can read your activities, sleep and training data.'
-                  : 'Connect your Garmin account so Rabbit can see your training.'}
-              </p>
-            </div>
-            {me.garmin.fake && (
-              <span className="rounded-full bg-(--warning-subtle) px-2 py-0.5 text-[0.5882rem] text-(--warning)"
-                title="Dev mode: try mfa@, wrong@, 429@ or cf@ emails; MFA code 123456">FAKE</span>
-            )}
-          </div>
-          {me.garmin.connected ? (
-            <Button variant="ghostDanger" className="self-start" disabled={busy}
-              onClick={() => void onDisconnect()}>Disconnect Garmin</Button>
-          ) : me.garmin.can_connect ? (
+    <div className="settings flex flex-col gap-6">
+      <Group label="Training">
+        <Row icon={<Icon><Target /></Icon>} title={goal ? goal.title : 'No goal yet'}
+          subtitle={goal ? (countdown ? `${countdown} · What Rabbit knows` : 'What Rabbit knows') : 'Tell Rabbit what you are training for'}
+          onClick={onEditGoal} />
+      </Group>
+
+      <Group label="Garmin"
+        footer={me.garmin.connected ? 'Rabbit can read your activities, sleep and training data. It never changes anything in Garmin.' : undefined}>
+        {me.garmin.connected ? (
+          <>
+            <Row icon={<Icon><Watch /></Icon>} title="Garmin Connect"
+              trailing={<span className="flex items-center gap-1.5 text-[0.7647rem] text-(--accent)">
+                <span className="size-2 rounded-full bg-(--accent)" />Connected</span>} />
+            <Row title="Disconnect Garmin" danger disabled={busy} center onClick={() => void onDisconnect()} />
+          </>
+        ) : me.garmin.can_connect ? (
+          <div className="p-4">
+            <p className="mb-3 text-[0.8235rem] text-(--text-secondary)">Connect your Garmin account so Rabbit can see your training.</p>
             <ConnectGarmin cooldownUntil={me.garmin.cooldown_until} onConnected={onChange} />
-          ) : (
-            <p className="text-xs text-(--text-muted)">Garmin connect isn't available on this server.</p>
-          )}
-        </section>
-
-        {me.garmin.connected && me.chat.available && (
-          <CoachingSettings me={me} onChange={onChange} onDevDone={onDevDone} />
-        )}
-
-        <section className="panel flex flex-col gap-3">
-          <div className="flex items-start gap-3">
-            <Bell className="mt-0.5 size-5 text-(--accent)" />
-            <div>
-              <h2 className="font-medium">Notifications</h2>
-              <p className="text-sm text-(--text-secondary)">
-                {!me.push.available ? 'Not configured on the server.'
-                  : !pushSupported() ? (isStandalone() ? 'Not supported on this device.' : 'Open Rabbit from your Home Screen to turn these on.')
-                  : here ? `On for this device${me.push.subscriptions > 1 ? ` (and ${me.push.subscriptions - 1} other)` : ''}.`
-                  : me.push.subscriptions ? `Off on this device (on for ${me.push.subscriptions} other).` : 'Off.'}
-              </p>
-            </div>
           </div>
-          {me.push.available && pushSupported() && (
-            <div className="flex gap-2">
-              {here === false && (
-                <Button variant="primary" disabled={busy} onClick={() => void onEnablePush()}>Turn on notifications</Button>
-              )}
-              <Button disabled={busy || !me.push.subscriptions} onClick={() => void onTestPush()}>Send test</Button>
-              {here && <Button variant="ghost" disabled={busy} onClick={() => void onDisablePush()}>Turn off</Button>}
-            </div>
-          )}
-          {pushMsg && <p className="text-xs text-(--text-muted)">{pushMsg}</p>}
-        </section>
+        ) : (
+          <Row icon={<Icon tone="muted"><Watch /></Icon>} title="Garmin" subtitle="Connecting isn't available on this server." />
+        )}
+        {me.garmin.fake && (
+          <Row title="Fake Garmin (dev)" subtitle="Try mfa@, wrong@, 429@ or cf@ emails; MFA code 123456" />
+        )}
+      </Group>
 
-        <section className="panel flex flex-col gap-2">
-          <h2 className="font-medium">Account</h2>
-          <p className="text-sm text-(--text-secondary)">Signed in as {me.profile.name || me.user_id}.</p>
-          <Button variant="outline" onClick={() => void signOut().finally(onChange)}
-            className="h-10 w-full border-(--danger) bg-transparent text-(--danger) shadow-none hover:bg-(--danger-subtle) hover:text-(--danger)">
-            <LogOut className="mr-1.5 size-4" /> Sign out
-          </Button>
-        </section>
+      {me.garmin.connected && me.chat.available && (
+        <CoachingSettings me={me} onChange={onChange} onDevDone={onDevDone} />
+      )}
+
+      <Group label="Notifications" footer={pushMsg ?? undefined}>
+        <Row icon={<Icon><Bell /></Icon>} title="Notifications" subtitle={pushStatus}
+          trailing={canToggle ? (
+            <Switch label="Notifications on this device" checked={!!here} disabled={busy}
+              onChange={(v) => void (v ? onEnablePush() : onDisablePush())} />
+          ) : null} />
+        {me.push.available && pushSupported() && me.push.subscriptions > 0 && (
+          <Row title={<span className="text-(--accent)">Send a test notification</span>} disabled={busy}
+            onClick={() => void onTestPush()} trailing={<span />} />
+        )}
+      </Group>
+
+      <Group label="Account">
+        <Row icon={<Avatar name={me.profile.name || me.user_id} picture={me.profile.picture} />}
+          title={me.profile.name || me.user_id} subtitle="Signed in with Google" />
+        <Row title={<span className="inline-flex items-center gap-1.5"><LogOut className="size-4" /> Sign out</span>}
+          danger center onClick={() => void signOut().finally(onChange)} />
+      </Group>
     </div>
   )
 }

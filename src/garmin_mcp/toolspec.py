@@ -19,6 +19,14 @@ RECENT_DESC = (
     "get_activity_splits)."
 )
 
+HISTORY_DESC = (
+    "The athlete's training history from Garmin in one call: weekly hours by sport, "
+    "consistency (active weeks, average and recent hours, longest break), per-sport totals "
+    "and longest sessions, and races and multisport events (including past triathlons from "
+    "the last few years). Use it when setting up or changing a goal, and whenever you need "
+    "their background, before asking them about it."
+)
+
 # The agent's execute is read-only and never returns raw time series.
 AGENT_EXECUTE_DESC = (
     'Call one read-only garminconnect method by name with keyword args (a JSON object), e.g. '
@@ -97,6 +105,19 @@ AGENT_TOOLS: list[dict] = [
                          "description": "How many days back, including today (default 7)."},
                 "sport": {"type": "string",
                           "description": "Optional filter: run, bike, swim, brick, strength, walk, hike."},
+            },
+        },
+    },
+    {
+        "name": "training_history",
+        "description": HISTORY_DESC,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "weeks": {"type": "integer", "minimum": 4, "maximum": 52,
+                          "description": "How many weeks back to summarize (default 16)."},
+                "past_triathlon_years": {"type": "integer", "minimum": 0, "maximum": 8,
+                                         "description": "Also list multisport races from this many years before that (default 5)."},
             },
         },
     },

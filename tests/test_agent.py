@@ -359,3 +359,38 @@ def test_chart_renders_as_its_own_part(env) -> None:
     assert chart["spec"]["x"] == ["Mon", "Tue"] and chart["spec"]["series"][0]["data"] == [30.0, 45.0]
     assert [p["type"] for p in rec["parts"]] == ["text", "chart", "text"]  # no tool card for it
     assert backend.calls[1][-1]["content"][0]["content"] == "Chart shown to the athlete."
+
+
+def test_training_history_summarizes_weeks_and_races(env) -> None:
+    from datetime import date
+
+    from garmin_mcp.history import summarize
+    acts = [
+        {"activity_id": 1, "date": "2026-10-05 07:00:00", "sport": "lap_swimming", "duration": "30:00", "distance_km": 1.0},
+        {"activity_id": 2, "date": "2026-10-06 07:00:00", "sport": "running", "duration": "1:00:00", "distance_km": 10.0,
+         "event": "race"},
+        {"activity_id": 3, "date": "2026-09-20 07:00:00", "sport": "multi_sport", "duration": "1:30:00",
+         "distance_km": 30.0, "multisport": {"is_parent": True}},
+        {"activity_id": 4, "date": "2026-09-20 07:00:00", "sport": "road_biking", "duration": "1:00:00",
+         "distance_km": 25.0, "multisport": {"is_parent": False, "parent_id": 3}},
+    ]
+    older = [{"activity_id": 9, "date": "2022-06-26 07:00:00", "sport": "multi_sport", "name": "CdA 70.3",
+              "duration": "7:09:38", "distance_km": 113.0, "multisport": {"is_parent": True}}]
+    out = summarize(acts, date(2026, 9, 14), date(2026, 10, 11), imperial=True, older_events=older)
+    assert out["by_sport"]["swim"]["distance_yd"] == 1094
+    assert out["by_sport"]["run"]["longest"] == {"date": "2026-10-06", "minutes": 60, "distance_mi": 6.2}
+    assert "bike" not in out["by_sport"]  # the multisport leg is folded into its parent
+    assert [w["hours"] for w in out["weekly"]] == [1.5, 0, 0, 1.5]  # Sep 20 is a Sunday
+    assert out["consistency"]["active_weeks"] == 2 and out["consistency"]["last_activity"] == "2026-10-06"
+    names = [e["name"] for e in out["races_and_multisport"]]
+    assert names[-1] == "CdA 70.3" and out["races_and_multisport"][0]["tagged"] == "race"
+
+
+def test_training_history_tool_reads_garmin(env) -> None:
+    agent, backend = env.agent([
+        ([], [tool_block("training_history", {"weeks": 8})], "tool_use"), (["Nice base."], [], "end_turn")])
+    events: list[dict] = []
+    go(agent, "friend", "I'm training for a 70.3", events.append)
+    result = json.loads(backend.calls[1][-1]["content"][0]["content"])
+    assert result["consistency"]["weeks"] in (8, 9) and result["by_sport"]
+    assert result["units"] == "metric"

@@ -31,6 +31,10 @@ export function toolLabel(toolName: string, params: Record<string, unknown>): st
     const sport = typeof params.sport === 'string' && params.sport ? ` ${params.sport}` : ''
     return `Looked at your last ${days} days of${sport} activities`
   }
+  if (toolName === 'training_history') {
+    const weeks = typeof params.weeks === 'number' ? params.weeks : 16
+    return `Reviewed your last ${weeks} weeks of training`
+  }
   if (toolName === 'search') return 'Looked up what Garmin data is available'
   if (toolName === 'update_notes') return 'Updated my coach notes'
   if (toolName === 'update_athlete_profile') return 'Noted something about you'

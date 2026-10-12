@@ -468,7 +468,8 @@ class CoachStore:
         else:
             lines.append("Active goal: none set yet. Onboarding: find out what they're training "
                          "for (race or event, date, target) and invite them to upload their plan. "
-                         "Save what you learn as you go.")
+                         "Once they name a goal, call training_history before asking about their "
+                         "background. Save what you learn as you go.")
         lines.append(f"Coach notes: {self.notes(user_id) or 'none yet'}")
         if thread is not None:
             lines.append("Thread: the coach log (briefs and workout notes)." if thread["kind"] == "coach"

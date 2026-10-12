@@ -127,17 +127,27 @@ class GarminService:
             "sport_filter": activity_type, "count": len(acts), "activities": acts,
         }
 
-    def activities_between(self, user_id: str, start: date, end: date) -> list[dict[str, Any]]:
+    def activities_between(self, user_id: str, start: date, end: date,
+                           activitytype: str | None = None) -> list[dict[str, Any]]:
         """Compact activities from ``start`` to ``end`` inclusive (cached like any read)."""
         info = self.registry.get("get_activities_by_date")
         if info is None or info.access is not Access.READ:
             raise GarminError("get_activities_by_date unavailable in this garminconnect version")
         kwargs = {"startdate": start.isoformat(), "enddate": end.isoformat()}
+        if activitytype:
+            kwargs["activitytype"] = activitytype
         raw = self._cached_call(user_id, info.name, info.fn, kwargs) or []
         return [compact_activity(a) for a in raw if isinstance(a, dict)]
 
 
 # ------------------------------------------------------------ compaction ---
+def _event_type(a: dict[str, Any]) -> str | None:
+    """Garmin's event tag (e.g. "race"), when the athlete set one."""
+    et = a.get("eventType")
+    key = et.get("typeKey") if isinstance(et, dict) else None
+    return key if key and key not in ("uncategorized", "other") else None
+
+
 def _round(v: Any, n: int = 1) -> Any:
     return round(v, n) if isinstance(v, int | float) else None
 
@@ -180,6 +190,7 @@ def compact_activity(a: dict[str, Any]) -> dict[str, Any]:
         "anaerobic_te": _round(a.get("anaerobicTrainingEffect")),
         "training_effect_label": a.get("trainingEffectLabel"),
         "training_load": _round(a.get("activityTrainingLoad"), 0),
+        "event": _event_type(a),
     }
     if "swim" in key:
         out["avg_pace_per_100m"] = _pace(speed, 100)

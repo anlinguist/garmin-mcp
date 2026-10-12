@@ -170,8 +170,6 @@ html.msg-menu-open .selectable, html.msg-menu-open .selectable * { -webkit-user-
 /* Keyboard open (lib/viewport.ts): the home indicator is under the keyboard, so the
    composer doesn't need its safe-area padding. Layout is otherwise left to iOS. */
 html.kb-open .composer-bar { padding-bottom: 4px; }
-/* Anticipated keyboard (lib/viewport.ts): glide up with it instead of jumping. */
-html.kb-anim .app-shell { transition: height 0.32s cubic-bezier(0.2, 0.8, 0.2, 1); }
 /* Typing: give the feed the room; the pinned plan cards come back when the keyboard closes. */
 html.kb-open .coach-pins { display: none; }
 /* Typing: fade the suggestions out without changing layout (removing them made the

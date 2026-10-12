@@ -323,11 +323,13 @@ class UnofficialProvider(GarminProvider):
             log_event(logger, logging.INFO, "garmin_session_resumed", user_id=user_id)
             return sess
 
-    # -- interactive login (CLI only; the server never calls these) ----------
+    # -- interactive login: garmin-mcp-login or Rabbit's Connect Garmin page --
+    # (user-initiated, one attempt, never automatic; see garminlogin.py)
     def login_start(self, user_id: str, email: str, password: str) -> LoginResult:
         validate_user_id(user_id)
         garmin = make_garmin(email, password, return_on_mfa=True,
                              impersonate_api_tls=self._impersonate)
+        _probe.reset()  # so a stale Cloudflare flag can't misclassify this login
         status, _ = garmin.login()  # single attempt; the library tries its strategies once
         if status == "needs_mfa":
             return LoginResult(LoginStatus.NEEDS_MFA, LoginHandle(user_id, garmin))
@@ -336,6 +338,7 @@ class UnofficialProvider(GarminProvider):
 
     def login_complete(self, handle: LoginHandle, mfa_code: str) -> None:
         garmin: Garmin = handle.state
+        _probe.reset()
         garmin.resume_login(None, mfa_code.strip())
         self._save_after_login(handle.user_id, garmin)
 

@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { Bell, LogOut, Radio, Watch } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar } from '@/components/Avatar'
+import { ConnectGarmin } from '@/components/ConnectGarmin'
 import { RabbitLogo } from '@/components/RabbitLogo'
-import { postStream, signOut, type Me } from '@/lib/api'
+import { postJSON, postStream, signOut, type Me } from '@/lib/api'
 import { enablePush, isStandalone, pushSupported, sendTestPush } from '@/lib/push'
 
 // Phase 1 home: account status plus the Phase 0 device checks (push, streaming).
@@ -12,6 +13,12 @@ export function Home({ me, onChange }: { me: Me; onChange: () => void }) {
   const [pushMsg, setPushMsg] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [ticks, setTicks] = useState<string[]>([])
+
+  async function onDisconnect() {
+    if (!window.confirm('Disconnect Garmin? Rabbit will stop seeing your training data until you connect again.')) return
+    setBusy(true)
+    try { await postJSON('/api/garmin/disconnect') } finally { setBusy(false); onChange() }
+  }
 
   async function onEnablePush() {
     if (!me.push.public_key) return
@@ -72,14 +79,29 @@ export function Home({ me, onChange }: { me: Me; onChange: () => void }) {
       </header>
 
       <main className="mx-auto flex w-full max-w-md flex-col gap-4 p-4">
-        <section className="panel flex items-start gap-3">
-          <Watch className="mt-0.5 size-5 text-(--accent)" />
-          <div>
-            <h2 className="font-medium">Garmin</h2>
-            <p className="text-sm text-(--text-secondary)">
-              {me.garmin_connected ? 'Connected.' : 'Not connected yet. Connecting Garmin comes in the next update.'}
-            </p>
+        <section className="panel flex flex-col gap-3">
+          <div className="flex items-start gap-3">
+            <Watch className="mt-0.5 size-5 text-(--accent)" />
+            <div className="flex-1">
+              <h2 className="font-medium">Garmin</h2>
+              <p className="text-sm text-(--text-secondary)">
+                {me.garmin.connected ? 'Connected. Rabbit can read your activities, sleep and training data.'
+                  : 'Connect your Garmin account so Rabbit can see your training.'}
+              </p>
+            </div>
+            {me.garmin.fake && (
+              <span className="rounded-full bg-(--warning-subtle) px-2 py-0.5 text-[10px] text-(--warning)"
+                title="Dev mode: try mfa@, wrong@, 429@ or cf@ emails; MFA code 123456">FAKE</span>
+            )}
           </div>
+          {me.garmin.connected ? (
+            <Button variant="ghostDanger" className="self-start" disabled={busy}
+              onClick={() => void onDisconnect()}>Disconnect Garmin</Button>
+          ) : me.garmin.can_connect ? (
+            <ConnectGarmin cooldownUntil={me.garmin.cooldown_until} onConnected={onChange} />
+          ) : (
+            <p className="text-xs text-(--text-muted)">Garmin connect isn't available on this server.</p>
+          )}
         </section>
 
         <section className="panel flex flex-col gap-3">

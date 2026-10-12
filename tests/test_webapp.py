@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import functools
 import json
+import logging
 import os
 from dataclasses import replace
 from pathlib import Path
@@ -24,6 +25,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 
 from garmin_mcp.appstore import AppStore
 from garmin_mcp.config import Settings, _parse_email_map
+from garmin_mcp.garminlogin import FakeLoginProvider, LoginManager
 from garmin_mcp.server import build_app
 from garmin_mcp.tokens import EncryptedFileTokenStore
 from garmin_mcp.webapp import build_app_routes
@@ -101,8 +103,11 @@ class Harness:
         self.auth = WebAuth(self.settings, store, "g-secret", http=self.google.client())
         self.push = WebPush(store, self.vapid_key, self.settings.vapid_subject,
                             http=self.pushsvc.client())
-        tokens = EncryptedFileTokenStore(self.settings.token_dir, self.key)
-        routes = build_app_routes(self.settings, self.auth, tokens, self.push)
+        self.tokens = tokens = EncryptedFileTokenStore(self.settings.token_dir, self.key)
+        self.logins = LoginManager(FakeLoginProvider(tokens, delay=0), store,
+                                   run=lambda fn: fn())
+        routes = build_app_routes(self.settings, self.auth, tokens, self.push, self.logins,
+                                  fake_garmin=True)
         self.app = build_app(self.settings, self.service, None, None, routes)
 
     def client(self, host: str = HOST) -> httpx2.AsyncClient:
@@ -426,3 +431,94 @@ async def test_profile_photo_only_from_google_cdn(h: Harness) -> None:
     async with h.client() as c:
         await sign_in(h, c)
         assert (await c.get("/app/api/me")).json()["profile"]["picture"] == ""
+
+
+# ----------------------------------------------------------- Connect Garmin --
+SECRET_PW = "correct-horse-battery-staple"
+
+
+async def _login(c: httpx2.AsyncClient, email: str, password: str = SECRET_PW) -> httpx2.Response:
+    return await c.post("/app/api/garmin/login", headers=JSON_HDRS,
+                        content=json.dumps({"email": email, "password": password}).encode())
+
+
+@run
+async def test_connect_garmin_happy_path(h: Harness) -> None:
+    async with h.client() as c:
+        await sign_in(h, c)
+        me = (await c.get("/app/api/me")).json()
+        assert me["garmin"]["connected"] is False and me["garmin"]["fake"] is True
+        r = await _login(c, "ok@example.com")
+        assert r.status_code == 202
+        job = r.json()
+        status = (await c.get(f"/app/api/garmin/login/{job['job_id']}")).json()
+        assert status["state"] == "ok"
+        assert (await c.get("/app/api/me")).json()["garmin"]["connected"] is True
+        assert (await c.post("/app/api/garmin/disconnect", headers=JSON_HDRS,
+                             content=b"{}")).status_code == 200
+        assert (await c.get("/app/api/me")).json()["garmin"]["connected"] is False
+
+
+@run
+async def test_connect_garmin_mfa_via_api(h: Harness) -> None:
+    async with h.client() as c:
+        await sign_in(h, c)
+        job = (await _login(c, "mfa@example.com")).json()
+        assert job["state"] == "needs_mfa"
+        bad = await c.post("/app/api/garmin/mfa", headers=JSON_HDRS,
+                           content=json.dumps({"job_id": job["job_id"], "code": "12ab"}).encode())
+        assert bad.status_code == 400  # digits only
+        ok = await c.post("/app/api/garmin/mfa", headers=JSON_HDRS,
+                          content=json.dumps({"job_id": job["job_id"], "code": "123456"}).encode())
+        assert ok.json()["state"] == "ok"
+
+
+@run
+async def test_connect_garmin_cooldown_response(h: Harness) -> None:
+    async with h.client() as c:
+        await sign_in(h, c)
+        job = (await _login(c, "wrong@example.com")).json()
+        status = (await c.get(f"/app/api/garmin/login/{job['job_id']}")).json()
+        assert status["error"] == "bad_credentials" and status["cooldown_scope"] == "user"
+        r = await _login(c, "ok@example.com")
+        assert r.status_code == 429 and r.json()["state"] == "cooldown"
+        assert (await c.get("/app/api/me")).json()["garmin"]["cooldown_until"] is not None
+
+
+@run
+async def test_connect_garmin_guards(h: Harness) -> None:
+    async with h.client() as c:
+        await sign_in(h, c)
+        job = (await _login(c, "mfa@example.com")).json()
+        no_origin = await c.post("/app/api/garmin/login", content=json.dumps(
+            {"email": "ok@example.com", "password": "x"}).encode(),
+            headers={"content-type": "application/json"})
+        assert no_origin.status_code == 403
+        assert (await c.post("/app/api/garmin/login", headers=JSON_HDRS, content=json.dumps(
+            {"email": "ok@example.com", "password": "x" * 300}).encode())).status_code == 400
+    h.google.sub, h.google.email = "g-222", "andrew@example.com"
+    async with h.client() as c:
+        await sign_in(h, c)  # a different user can't see or finish friend's login
+        assert (await c.get(f"/app/api/garmin/login/{job['job_id']}")).status_code == 404
+        r = await c.post("/app/api/garmin/mfa", headers=JSON_HDRS, content=json.dumps(
+            {"job_id": job["job_id"], "code": "123456"}).encode())
+        assert r.status_code == 404
+    assert h.tokens.load("andrew") is None and h.tokens.load("friend") is None
+
+
+def test_password_never_reaches_logs_or_responses(h: Harness, caplog) -> None:
+    @run
+    async def go() -> list[str]:
+        bodies = []
+        async with h.client() as c:
+            await sign_in(h, c)
+            for email in ("wrong@example.com", "429@example.com"):
+                r = await _login(c, email)
+                bodies.append(r.text)
+                if r.status_code == 202:
+                    bodies.append((await c.get(f"/app/api/garmin/login/{r.json()['job_id']}")).text)
+            bodies.append((await c.get("/app/api/me")).text)
+        assert not any(SECRET_PW in b for b in bodies)
+    with caplog.at_level(logging.DEBUG):
+        go()
+    assert SECRET_PW not in caplog.text

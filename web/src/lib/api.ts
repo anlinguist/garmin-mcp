@@ -7,6 +7,13 @@ export type Me = {
   user_id: string
   profile: { name: string; picture: string }
   garmin_connected: boolean
+  garmin: {
+    connected: boolean
+    can_connect: boolean
+    cooldown_until: number | null
+    cooldown_scope: 'user' | 'global' | null
+    fake: boolean
+  }
   push: { available: boolean; public_key: string | null; subscriptions: number }
 }
 
@@ -43,3 +50,15 @@ export async function postStream(path: string, body: unknown = {}): Promise<Resp
 
 export const getMe = () => getJSON<Me>('/api/me')
 export const signOut = () => postJSON('/auth/logout')
+
+/** POST that returns the status and body instead of throwing on 4xx (except 401). */
+export async function postRaw<T>(path: string, body: unknown = {}): Promise<{ status: number; data: T }> {
+  const r = await fetch(`/app${path}`, {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  })
+  if (r.status === 401) throw new AuthError('not signed in')
+  let data: unknown = null
+  try { data = await r.json() } catch { /* empty */ }
+  return { status: r.status, data: data as T }
+}

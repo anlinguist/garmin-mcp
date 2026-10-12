@@ -21,6 +21,7 @@ from starlette.staticfiles import StaticFiles
 from starlette.types import Scope
 
 from .config import Settings
+from .garminlogin import Busy, Cooldown, LoginManager
 from .logs import log_event
 from .tokens import TokenStore, TokenStoreError
 from .webauth import WebAuth
@@ -74,7 +75,8 @@ async def read_json(request: Request) -> Any:
 
 
 def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
-                     push: WebPush | None) -> list[BaseRoute]:
+                     push: WebPush | None, logins: LoginManager | None = None,
+                     *, fake_garmin: bool = False) -> list[BaseRoute]:
     local = settings.public_host.split(":")[0] in {"localhost", "127.0.0.1"}
 
     def host_ok(request: Request) -> bool:
@@ -110,10 +112,18 @@ def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
             connected = token_store.load(user_id) is not None
         except TokenStoreError:
             connected = False
+        cd = logins.cooldown(user_id) if logins else None
         return JSONResponse({
             "user_id": user_id,
             "profile": auth.profile(user_id),
             "garmin_connected": connected,
+            "garmin": {
+                "connected": connected,
+                "can_connect": logins is not None,
+                "cooldown_until": int(cd[0]) if cd else None,
+                "cooldown_scope": cd[1] if cd else None,
+                "fake": fake_garmin,
+            },
             "push": {
                 "available": push is not None,
                 "public_key": push.public_key if push else None,
@@ -149,6 +159,70 @@ def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
         return JSONResponse({"results": [
             {"host": r.endpoint_host, "status": r.status, "removed": r.removed} for r in results
         ]})
+
+    # ------------------------------------------------------- Garmin login --
+    def _str(body: Any, key: str, max_len: int) -> str:
+        v = body.get(key) if isinstance(body, dict) else None
+        if not isinstance(v, str) or not v.strip() or len(v) > max_len:
+            raise ValueError(key)
+        return v
+
+    def _cooldown_resp(e: Cooldown) -> JSONResponse:
+        return JSONResponse({"state": "cooldown", "cooldown_until": int(e.until),
+                             "cooldown_scope": e.scope}, status_code=429)
+
+    async def garmin_login(request: Request, user_id: str) -> Response:
+        if logins is None:
+            return _err(503, "Garmin connect not available")
+        body = await read_json(request)
+        email = _str(body, "email", 254).strip()
+        password = _str(body, "password", 256)
+        del body
+        try:
+            job = logins.start(user_id, email, password)
+        except Cooldown as e:
+            return _cooldown_resp(e)
+        except Busy:
+            return _err(409, "Another Garmin login is in progress. Try again in a minute.")
+        finally:
+            del password
+        return JSONResponse(job.public(), status_code=202)
+
+    async def garmin_mfa(request: Request, user_id: str) -> Response:
+        if logins is None:
+            return _err(503, "Garmin connect not available")
+        body = await read_json(request)
+        job_id = _str(body, "job_id", 64)
+        code = _str(body, "code", 12).strip()
+        if not code.isdigit():
+            raise ValueError("code")
+        try:
+            job = logins.submit_mfa(user_id, job_id, code)
+        except KeyError:
+            return _err(404, "login not found")
+        except Busy:
+            return _err(409, "Another Garmin login is in progress. Try again in a minute.")
+        return JSONResponse(job.public(), status_code=202)
+
+    async def garmin_login_status(request: Request, user_id: str) -> Response:
+        if logins is None:
+            return _err(503, "Garmin connect not available")
+        try:
+            job = logins.status(user_id, request.path_params["job_id"])
+        except KeyError:
+            return _err(404, "login not found")
+        out = job.public()
+        if job.state == "error":
+            cd = logins.cooldown(user_id)
+            out["cooldown_until"] = int(cd[0]) if cd else None
+            out["cooldown_scope"] = cd[1] if cd else None
+        return JSONResponse(out)
+
+    async def garmin_disconnect(request: Request, user_id: str) -> Response:
+        if logins is None:
+            return _err(503, "Garmin connect not available")
+        logins.disconnect(user_id, token_store)
+        return JSONResponse({"ok": True})
 
     async def diag_stream(request: Request, user_id: str) -> Response:
         """Phase 0: check NDJSON arrives incrementally through Cloudflare + Caddy."""
@@ -196,6 +270,12 @@ def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
               methods=["POST"]),
         Route("/app/api/push/test", _api(push_test, mutating=True), methods=["POST"]),
         Route("/app/api/diag/stream", _api(diag_stream, mutating=True), methods=["POST"]),
+        Route("/app/api/garmin/login", _api(garmin_login, mutating=True), methods=["POST"]),
+        Route("/app/api/garmin/login/{job_id}", _api(garmin_login_status, mutating=False),
+              methods=["GET"]),
+        Route("/app/api/garmin/mfa", _api(garmin_mfa, mutating=True), methods=["POST"]),
+        Route("/app/api/garmin/disconnect", _api(garmin_disconnect, mutating=True),
+              methods=["POST"]),
     ]
     if (WEB_DIST / "index.html").is_file():
         routes.append(Mount("/app", app=_Static(directory=WEB_DIST, html=True)))

@@ -22,10 +22,11 @@ from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
 from .appstore import AppStore
+from .garminlogin import FakeLoginProvider, LoginManager
 from .auth import SCOPE, GitHubOAuthProvider
 from .config import Settings
 from .logs import log_event, setup_logging
-from .providers import GarminError
+from .providers import GarminError, GarminProvider
 from .poller import Poller, PollerThread, RoutineClient, Schedule, StateStore, token_fingerprint
 from .providers.unofficial import UnofficialProvider
 from .registry import Registry
@@ -162,7 +163,8 @@ def build_app(settings: Settings, service: GarminService,
 
 
 def build_web_routes(settings: Settings, fernet_key: str, token_store: EncryptedFileTokenStore,
-                     dev_user: str | None) -> list[Any]:
+                     dev_user: str | None, provider: GarminProvider | None = None,
+                     on_tokens_changed: Any = None) -> list[Any]:
     """Rabbit web app routes (/app); empty unless APP_ENABLED."""
     if not settings.app_enabled:
         return []
@@ -183,9 +185,19 @@ def build_web_routes(settings: Settings, fernet_key: str, token_store: Encrypted
             push = WebPush(store, vapid_key, settings.vapid_subject)
         except Exception as e:  # push is optional; the app works without it
             log_event(logger, logging.ERROR, "push_disabled", error=type(e).__name__)
+    fake = os.environ.get("RABBIT_FAKE_GARMIN", "").strip() == "1"
+    if fake:
+        # Scripted logins with no network, for exercising the Connect Garmin UI.
+        log_event(logger, logging.WARNING, "rabbit_fake_garmin_enabled")
+        provider = FakeLoginProvider(token_store)
+    logins = None
+    if provider is not None:
+        logins = LoginManager(provider, store,
+                              on_tokens_changed=on_tokens_changed or (lambda user_id: None))
     log_event(logger, logging.INFO, "app_enabled", push=push is not None,
+              garmin_connect=logins is not None, fake_garmin=fake,
               allowed_users=len(settings.allowed_google_users))
-    return build_app_routes(settings, auth, token_store, push)
+    return build_app_routes(settings, auth, token_store, push, logins, fake_garmin=fake)
 
 
 def build_poller(settings: Settings, service: GarminService,
@@ -256,7 +268,8 @@ def create_app() -> tuple[Settings, Any]:
         # Rabbit-only process (its own service, port, data dir and user): no /mcp
         # endpoint at all, and config errors are fatal here since nothing else
         # depends on this process.
-        web_routes = build_web_routes(settings, fernet_key, token_store, dev_user)
+        web_routes = build_web_routes(settings, fernet_key, token_store, dev_user, provider,
+                                      service.cache.clear_user)
         if not web_routes:
             raise RuntimeError("MCP_ENABLED=false needs APP_ENABLED=true")
         log_event(logger, logging.INFO, "startup", base_url=settings.public_base_url,

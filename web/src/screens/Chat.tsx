@@ -82,6 +82,9 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
   const [toast, setToast] = useState<{ msg: string; n: number } | null>(null)
   const showToast = (msg: string) => setToast((t) => ({ msg, n: (t?.n ?? 0) + 1 }))
   const feed = useRef<HTMLDivElement>(null)
+  // Was the user at the bottom of the feed? Kept current by scroll events, so that when the
+  // feed resizes (keyboard opening/closing) we can keep the newest messages in view.
+  const atBottom = useRef(true)
 
   const thread = threads.find((t) => t.id === threadId) ?? null
   const byId = useMemo(() => Object.fromEntries(threads.map((t) => [t.id, t])), [threads])
@@ -112,6 +115,18 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
     if (tz) void putSettings({ timezone: tz }).then(onChange).catch(() => {})
   }, [me.settings.timezone_set]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keyboard opens/closes (or anything else resizes the feed): stay pinned to the newest
+  // messages if that's where the user was.
+  useEffect(() => {
+    const el = feed.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => {
+      if (atBottom.current) el.scrollTop = el.scrollHeight
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [threadId, pending, items.length === 0])
 
   // An approval is waiting on you: bring it into view.
   const pendingCount = items.filter((it) => it.kind === 'approval' && it.status === 'pending').length
@@ -298,7 +313,11 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
           </div>
         </div>
       ) : (
-        <div ref={feed} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4">
+        <div ref={feed} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4"
+          onScroll={(e) => {
+            const el = e.currentTarget
+            atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+          }}>
           <div className="mx-auto max-w-2xl space-y-4 py-4">
             {rows.map((r) => {
               if (r.kind === 'link') {

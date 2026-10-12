@@ -10,8 +10,10 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
 import { registerServiceWorker } from './lib/push'
+import { trackVisualViewport } from './lib/viewport'
 
 registerServiceWorker()
+trackVisualViewport()
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />

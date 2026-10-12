@@ -163,3 +163,19 @@ def test_read_file_reopens_own_uploads_only(env, tmp_path) -> None:
     assert results[1]["is_error"] and "not found" in results[1]["content"]
     shown = next(e for e in events if e["type"] == "tool-call-result")["result"]
     assert shown == {"file": "plan.pdf", "kind": "pdf"}  # UI gets a small summary, not the bytes
+
+
+def test_messages_from_start_for_the_peek(env, tmp_path) -> None:
+    app, agent, _, _ = _app(env, tmp_path)
+    thread = agent.coach.create_thread("friend")["id"]
+    for i in range(5):
+        agent.coach.append_turn("friend", thread, {"id": f"t{i}", "ts": i, "kind": "chat",
+                                                   "user": f"q{i}", "assistant": f"a{i}", "parts": []})
+
+    async def go() -> None:
+        async with _client(app) as c:
+            first = (await c.get(f"/app/api/threads/{thread}/messages?from=start&limit=2")).json()
+            last = (await c.get(f"/app/api/threads/{thread}/messages?limit=2")).json()
+            assert [t["user"] for t in first["turns"]] == ["q0", "q1"] and first["has_more"]
+            assert [t["user"] for t in last["turns"]] == ["q3", "q4"]
+    asyncio.run(go())

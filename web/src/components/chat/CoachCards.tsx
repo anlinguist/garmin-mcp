@@ -28,16 +28,24 @@ export function DiscussButton({ onClick, busy }: { onClick: () => void; busy: bo
   )
 }
 
-export function ThreadLinkCard({ thread, onOpen }: { thread: Thread | undefined; onOpen: () => void }) {
+export function ThreadLinkCard({ thread, onOpen, pressProps }: {
+  thread: Thread | undefined; onOpen: () => void
+  /** long-press / right-click for the peek menu */
+  pressProps?: React.HTMLAttributes<HTMLDivElement>
+}) {
   const title = thread ? thread.title || 'New chat' : 'Deleted chat'
+  // A div, not a button: iOS only selects text (the long-press haptic) outside buttons.
   return (
-    <button onClick={onOpen} disabled={!thread}
-      className="flex w-full items-center gap-2.5 rounded-xl border border-dashed border-(--accent)/40 bg-(--accent-subtle) px-3 py-2 text-left transition-colors hover:bg-(--accent)/10 disabled:opacity-50">
+    <div role="button" tabIndex={0} aria-disabled={!thread} data-thread-id={thread?.id}
+      onClick={() => { if (thread) onOpen() }}
+      onKeyDown={(e) => { if (thread && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onOpen() } }}
+      {...(thread ? pressProps : {})}
+      className="msg-press flex w-full cursor-pointer items-center gap-2.5 rounded-xl border border-dashed border-(--accent)/40 bg-(--accent-subtle) px-3 py-2 text-left transition-colors hover:bg-(--accent)/10 aria-disabled:opacity-50">
       <MessageSquareText className="size-4 shrink-0 text-(--accent)" />
       <span className="min-w-0">
         <span className="block text-[10px] font-semibold uppercase tracking-widest text-(--accent)">Chat started</span>
         <span className="block truncate text-[13px] text-foreground">{title}</span>
       </span>
-    </button>
+    </div>
   )
 }

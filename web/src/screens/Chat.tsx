@@ -22,6 +22,7 @@ import { useCoach, type QueuedSend, type ChartItem, type Approval, type ChatItem
 import { ApprovalCard } from '@/components/chat/ApprovalCard'
 import { Chart } from '@/components/chat/Chart'
 import { MessageMenu, type MenuTarget } from '@/components/chat/MessageMenu'
+import { ThreadPeek } from '@/components/chat/ThreadPeek'
 import { useLongPress } from '@/hooks/useLongPress'
 import { hapticTap } from '@/lib/haptics'
 
@@ -81,6 +82,7 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
   const [busy, setBusy] = useState(false)
   const [draft, setDraft] = useState<{ text: string; n: number } | null>(null)
   const [menu, setMenu] = useState<MenuTarget | null>(null)
+  const [peek, setPeek] = useState<string | null>(null)
   const [toast, setToast] = useState<{ msg: string; n: number } | null>(null)
   const showToast = (msg: string) => setToast((t) => ({ msg, n: (t?.n ?? 0) + 1 }))
   const feed = useRef<HTMLDivElement>(null)
@@ -208,6 +210,7 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
   }
 
   const press = useLongPress((el) => {
+    if (el.dataset.threadId) { hapticTap(); setPeek(el.dataset.threadId); return }
     const id = el.dataset.msgId
     const item = items.find((it): it is ChatMessage => it.kind === 'message' && it.id === id)
     if (!item || item.error) return
@@ -352,7 +355,8 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
             {rows.map((r) => {
               if (r.kind === 'link') {
                 if (!byId[r.item.threadId]) return null // chat was deleted
-                return <ThreadLinkCard key={r.item.id} thread={byId[r.item.threadId]} onOpen={() => openThread(r.item.threadId)} />
+                return <ThreadLinkCard key={r.item.id} thread={byId[r.item.threadId]} pressProps={press}
+                  onOpen={() => openThread(r.item.threadId)} />
               }
               if (r.kind === 'chart') {
                 return (
@@ -403,6 +407,19 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
       {menu && (
         <MessageMenu target={menu} onClose={() => setMenu(null)} onToast={showToast}
           onDiscuss={() => { if (thread && menu.item.turnId) newThread({ thread_id: thread.id, turn_id: menu.item.turnId }, menu.item) }} />
+      )}
+      {peek && byId[peek] && (
+        <ThreadPeek thread={byId[peek]!} onClose={() => setPeek(null)}
+          onOpen={() => { setPeek(null); openThread(peek) }}
+          onDelete={async () => {
+            try {
+              await deleteThread(peek)
+              setPeek(null)
+              await refreshThreads()
+              reload()
+              showToast('Chat deleted')
+            } catch (e) { window.alert((e as Error).message) }
+          }} />
       )}
       {toast && <div key={toast.n} className="rabbit-toast" role="status">{toast.msg}</div>}
 

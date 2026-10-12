@@ -479,7 +479,8 @@ def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
         if before:
             idx = next((i for i, t in enumerate(turns) if t.get("id") == before), len(turns))
             turns = turns[:idx]
-        page = turns[-limit:]
+        # ?from=start: the opening turns (the coach log's peek at a chat), else the newest.
+        page = turns[:limit] if request.query_params.get("from") == "start" else turns[-limit:]
         keys = ("id", "ts", "kind", "label", "user", "parts", "attachments", "seed_from")
         return JSONResponse({"thread": _thread_view(thread),
                              "turns": [{k: t.get(k) for k in keys if k in t} for t in page],

@@ -317,13 +317,22 @@ class CoachStore:
         return self._threads_doc(user_id).update(apply)
 
     def delete_thread(self, user_id: str, thread_id: str) -> None:
-        def apply(d: dict[str, Any]) -> None:
+        """Delete a topic thread, its history, and its link card in the goal's coach log."""
+        def apply(d: dict[str, Any]) -> str:
             t = d.get("threads", {}).get(thread_id)
             if t is None or t["kind"] != "topic":
                 raise CoachError("Only topic threads can be deleted.")
             del d["threads"][thread_id]
-        self._threads_doc(user_id).update(apply)
+            return t["goal_id"]
+        goal_id = self._threads_doc(user_id).update(apply)
         self._s.user_doc(user_id, f"conv-{thread_id}").delete()
+        coach = self.coach_thread(user_id, goal_id)
+
+        def unlink(d: dict[str, Any]) -> None:
+            d["turns"] = [t for t in d.get("turns", []) if not (
+                t.get("kind") == "link" and any(p.get("thread_id") == thread_id
+                                                for p in t.get("parts", [])))]
+        self._s.user_doc(user_id, f"conv-{coach['id']}").update(unlink)
 
     def clear_thread(self, user_id: str, thread_id: str) -> None:
         self._s.user_doc(user_id, f"conv-{thread_id}").delete()

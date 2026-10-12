@@ -94,8 +94,12 @@ def test_discuss_seeds_topic_and_links_from_log(coach) -> None:
         coach.create_thread("friend", seed={"thread_id": log["id"], "turn_id": "missing"})
     with pytest.raises(CoachError):
         coach.delete_thread("friend", log["id"])  # the coach log can't be deleted
+    other = coach.create_thread("friend", title="keep me")
     coach.delete_thread("friend", topic["id"])
     assert coach.turns("friend", topic["id"]) == []
+    cards = [t["parts"][0]["thread_id"] for t in coach.turns("friend", log["id"]) if t["kind"] == "link"]
+    assert cards == [other["id"]]  # only the deleted chat's card is gone
+    assert [t["id"] for t in coach.turns("friend", log["id"]) if t["kind"] != "link"] == ["t1"]
 
 
 def test_legacy_conversation_migrates(coach, tmp_path, fernet_key) -> None:

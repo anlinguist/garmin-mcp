@@ -2,7 +2,7 @@
 // which expands into planned vs. done by day. Weeks follow the plan's own weeks.
 import { useEffect, useRef, useState } from 'react'
 import {
-  Activity, Bike, Check, ChevronDown, ChevronRight, Dumbbell, Footprints, Layers, Map as MapIcon, Moon, Waves,
+  Activity, Bike, Check, ChevronRight, Dumbbell, Footprints, Layers, Map as MapIcon, Moon, Waves,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Goal, PlanWeek, Sport, WeekDay } from '@/lib/api'
@@ -190,7 +190,6 @@ export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay }: {
               </span>
             )}
           </span>
-          <ChevronDown className={cn('size-4 shrink-0 self-center text-muted-foreground transition-transform', open && 'rotate-180')} />
         </button>
       </div>
         <div className={cn('week-drawer', open && 'week-drawer--open')} aria-hidden={!open} inert={!open}>

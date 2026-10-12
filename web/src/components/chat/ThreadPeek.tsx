@@ -41,34 +41,34 @@ export function ThreadPeek({ thread, onOpen, onDelete, onClose }: {
         <button className="thread-peek-card" onClick={(e) => { e.stopPropagation(); onOpen() }}>
           <span className="flex items-center gap-2 border-b border-(--border) px-3.5 py-2.5">
             <MessageSquareText className="size-4 shrink-0 text-(--accent)" />
-            <span className="min-w-0 flex-1 truncate text-[0.875rem] font-medium text-foreground">{thread.title || 'New chat'}</span>
-            <span className="shrink-0 text-[0.6875rem] text-muted-foreground">{started}</span>
+            <span className="min-w-0 flex-1 truncate text-[0.8235rem] font-medium text-foreground">{thread.title || 'New chat'}</span>
+            <span className="shrink-0 text-[0.6471rem] text-muted-foreground">{started}</span>
           </span>
-          <span className="block max-h-[46vh] space-y-2.5 overflow-hidden px-3.5 py-3 text-left">
+          <span className="chat-text block max-h-[46vh] space-y-2.5 overflow-hidden px-3.5 py-3 text-left">
             {!turns && !failed && <span className="thinking-dots flex gap-[3px]"><span /><span /><span /></span>}
-            {failed && <span className="text-[0.8125rem] text-muted-foreground">Couldn't load this chat.</span>}
+            {failed && <span className="text-[0.7647rem] text-muted-foreground">Couldn't load this chat.</span>}
             {seedText && (
-              <span className="block rounded-lg border border-dashed border-border px-2.5 py-1.5 text-[0.75rem] leading-snug text-muted-foreground">
+              <span className="block rounded-lg border border-dashed border-border px-2.5 py-1.5 text-[0.7059rem] leading-snug text-muted-foreground">
                 From your coach log: {clip(seedText, 160)}
               </span>
             )}
             {first?.user && (
-              <span className="ml-auto block w-fit max-w-[88%] whitespace-pre-wrap rounded-xl rounded-tr-sm border border-black/10 bg-[var(--msg-user-bg)] px-3 py-2 text-[0.875rem] leading-relaxed text-[var(--msg-user-text)]">
+              <span className="ml-auto block w-fit max-w-[88%] whitespace-pre-wrap rounded-xl rounded-tr-sm border border-black/10 bg-[var(--msg-user-bg)] px-3 py-2 text-[0.8235rem] leading-relaxed text-[var(--msg-user-text)]">
                 {clip(first.user, PREVIEW_CHARS)}
               </span>
             )}
             {reply && (
-              <span className="block max-w-[92%] whitespace-pre-wrap rounded-xl rounded-tl-sm border border-border bg-background px-3 py-2 text-[0.8125rem] leading-relaxed text-foreground/85">
+              <span className="block max-w-[92%] whitespace-pre-wrap rounded-xl rounded-tl-sm border border-border bg-background px-3 py-2 text-[0.7647rem] leading-relaxed text-foreground/85">
                 {clip(reply, PREVIEW_CHARS)}
               </span>
             )}
-            {turns && !first && !failed && <span className="text-[0.8125rem] text-muted-foreground">No messages yet.</span>}
+            {turns && !first && !failed && <span className="text-[0.7647rem] text-muted-foreground">No messages yet.</span>}
           </span>
-          <span className="block border-t border-(--border) py-1.5 text-center text-[0.6875rem] text-muted-foreground">Tap to open</span>
+          <span className="block border-t border-(--border) py-1.5 text-center text-[0.6471rem] text-muted-foreground">Tap to open</span>
         </button>
         <div role="menu" className="msg-menu thread-peek-menu" onClick={(e) => e.stopPropagation()}>
           <button role="menuitem" onClick={onOpen}
-            className="flex w-full items-center justify-between gap-6 px-4 py-2.5 text-left text-[0.9375rem] text-(--text) active:bg-(--bg-inset)">
+            className="flex w-full items-center justify-between gap-6 px-4 py-2.5 text-left text-[0.8824rem] text-(--text) active:bg-(--bg-inset)">
             Open chat<ExternalLink className="size-4 text-(--text-secondary)" />
           </button>
           <button role="menuitem" disabled={deleting}
@@ -77,7 +77,7 @@ export function ThreadPeek({ thread, onOpen, onDelete, onClose }: {
               setDeleting(true)
               try { await onDelete() } finally { setDeleting(false) }
             }}
-            className="flex w-full items-center justify-between gap-6 px-4 py-2.5 text-left text-[0.9375rem] text-(--danger) active:bg-(--bg-inset) disabled:opacity-50">
+            className="flex w-full items-center justify-between gap-6 px-4 py-2.5 text-left text-[0.8824rem] text-(--danger) active:bg-(--bg-inset) disabled:opacity-50">
             {deleting ? 'Deleting…' : confirming ? 'Tap again to delete' : 'Delete chat'}
             <Trash2 className="size-4" />
           </button>

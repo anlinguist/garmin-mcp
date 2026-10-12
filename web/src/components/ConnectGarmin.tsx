@@ -148,7 +148,7 @@ export function ConnectGarmin({ cooldownUntil, onConnected }: {
         disabled={coolingDown || !email || !password}>
         {coolingDown ? `Try again at ${fmtTime(until!)}` : 'Connect Garmin'}
       </Button>
-      <p className="flex items-start gap-1.5 text-[0.6875rem] text-(--text-muted)">
+      <p className="flex items-start gap-1.5 text-[0.6471rem] text-(--text-muted)">
         <Lock className="mt-0.5 size-3 shrink-0" />
         Your password goes to Garmin once to sign in and is never stored. Rabbit keeps only
         Garmin's encrypted access token, and you can disconnect anytime.

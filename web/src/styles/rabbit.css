@@ -5,6 +5,11 @@
   html { font: -apple-system-body; }
 }
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+@supports not ((font: -apple-system-body) and (-webkit-touch-callout: none)) {
+  html { font-size: 106.25%; } /* 17px with the browser default, matching iOS */
+}
+/* Conversation text reads like iMessage: the proportional system font, not DM Mono. */
+.chat-text, .chat-text .prose { font-family: var(--font); letter-spacing: normal; }
 
 /* Rabbit-specific additions on top of Dolly's globals. */
 html, body, #root { height: 100%; }
@@ -147,7 +152,7 @@ html.msg-menu-open .selectable, html.msg-menu-open .selectable * { -webkit-user-
 .rabbit-toast {
   position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom)); z-index: 70;
   transform: translateX(-50%); padding: 6px 14px; border-radius: 999px;
-  background: var(--text); color: var(--bg); font-size: 0.8125rem; box-shadow: var(--shadow-md); pointer-events: none;
+  background: var(--text); color: var(--bg); font-size: 0.7647rem; box-shadow: var(--shadow-md); pointer-events: none;
   animation: toast-in 1.6s ease both;
 }
 @keyframes toast-in {
@@ -163,3 +168,6 @@ html.msg-menu-open .selectable, html.msg-menu-open .selectable * { -webkit-user-
 html.kb-open .composer-bar { padding-bottom: 4px; }
 /* Typing: give the feed the room; the pinned plan cards come back when the keyboard closes. */
 html.kb-open .coach-pins { display: none; }
+/* The expanded week dims everything under it (feed and composer); tap to close. */
+.week-dim { position: fixed; inset: 0; z-index: 45; background: rgba(0, 0, 0, 0.45);
+  animation: modal-fade-in 0.18s ease-out both; }

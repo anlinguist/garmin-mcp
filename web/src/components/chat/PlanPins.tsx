@@ -27,6 +27,8 @@ function fmtRange(start: string, end: string): string {
     : `${mon(a)} ${a.getDate()} – ${mon(b)} ${b.getDate()}`
 }
 
+const hasDuration = (title: string) => /\d+\s*(['’]|min\b|h\b)/i.test(title)
+
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
 /** "Week 3 of 39 · Base" (whatever is known). */
@@ -34,7 +36,7 @@ export function planLine(week: PlanWeek | null, goal: Goal): string {
   const bits: string[] = []
   if (week?.index && week.index > 0) bits.push(`Week ${week.index}${week.weeks ? ` of ${week.weeks}` : ''}`)
   if (week?.phase && week.phase !== 'post-race') bits.push(cap(week.phase))
-  if (week?.weeks_to_race != null && week.weeks_to_race >= 1) bits.push(`${week.weeks_to_race} wks to race`)
+  if (!bits.length && week?.weeks_to_race != null && week.weeks_to_race >= 1) bits.push(`${week.weeks_to_race} wks to race`)
   if (!bits.length) bits.push(goal.title)
   return bits.join(' · ')
 }
@@ -57,7 +59,7 @@ function DayDot({ day }: { day: WeekDay }) {
   const st = dayState(day)
   return (
     <span className="flex flex-col items-center gap-1">
-      <span className={cn('text-[0.625rem] leading-none', day.today ? 'font-semibold text-(--accent)' : 'text-muted-foreground')}>
+      <span className={cn('text-[0.5882rem] leading-none', day.today ? 'font-semibold text-(--accent)' : 'text-muted-foreground')}>
         {day.weekday.charAt(0)}
       </span>
       <span className={cn('flex size-[18px] items-center justify-center rounded-full border text-white',
@@ -81,23 +83,23 @@ function DayRow({ day, onAsk }: { day: WeekDay; onAsk: (day: WeekDay) => void })
       className={cn('flex w-full gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-secondary',
         day.today && 'bg-(--accent-subtle)')}>
       <span className="w-9 shrink-0 pt-px text-center leading-tight">
-        <span className={cn('block text-[0.6875rem] font-semibold uppercase', day.today ? 'text-(--accent)' : 'text-muted-foreground')}>{day.weekday}</span>
-        <span className="block text-[0.8125rem] text-foreground/80">{date.getDate()}</span>
+        <span className={cn('block text-[0.6471rem] font-semibold uppercase', day.today ? 'text-(--accent)' : 'text-muted-foreground')}>{day.weekday}</span>
+        <span className="block text-[0.7647rem] text-foreground/80">{date.getDate()}</span>
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-1">
-        {empty && <span className="text-[0.8125rem] text-muted-foreground">Nothing planned</span>}
+        {empty && <span className="text-[0.7647rem] text-muted-foreground">Nothing planned</span>}
         {day.sessions.map((s, i) => {
           const Icon = SPORT_ICON[s.sport]
           return (
             <span key={i} className="flex items-start gap-2">
               <Icon className={cn('mt-0.5 size-3.5 shrink-0', s.status === 'done' ? 'text-(--accent)' : 'text-muted-foreground')} />
               <span className="min-w-0 flex-1">
-                <span className={cn('block text-[0.8125rem] leading-snug', s.status === 'rest' ? 'text-muted-foreground' : 'text-foreground')}>
-                  {s.title}{s.minutes ? <span className="text-muted-foreground"> · {fmtMinutes(s.minutes)}</span> : null}
+                <span className={cn('block text-[0.7647rem] leading-snug', s.status === 'rest' ? 'text-muted-foreground' : 'text-foreground')}>
+                  {s.title}{s.minutes && !hasDuration(s.title) ? <span className="text-muted-foreground"> · {fmtMinutes(s.minutes)}</span> : null}
                 </span>
-                {s.detail && <span className="block text-[0.6875rem] leading-snug text-muted-foreground">{s.detail}</span>}
+                {s.detail && <span className="block text-[0.6471rem] leading-snug text-muted-foreground">{s.detail}</span>}
               </span>
-              <span className={cn('shrink-0 text-[0.6875rem] leading-5',
+              <span className={cn('shrink-0 text-[0.6471rem] leading-5',
                 s.status === 'done' ? 'text-(--accent)' : s.status === 'missed' ? 'text-(--danger)' : 'text-muted-foreground')}>
                 {s.status === 'done' ? `✓ ${fmtMinutes(s.activity!.minutes)}` : s.status === 'missed' ? 'Missed' : ''}
               </span>
@@ -109,8 +111,8 @@ function DayRow({ day, onAsk }: { day: WeekDay; onAsk: (day: WeekDay) => void })
           return (
             <span key={`x${i}`} className="flex items-start gap-2">
               <Icon className="mt-0.5 size-3.5 shrink-0 text-(--accent)" />
-              <span className="min-w-0 flex-1 truncate text-[0.8125rem] text-foreground">{a.name}</span>
-              <span className="shrink-0 text-[0.6875rem] leading-5 text-(--accent)">✓ {fmtMinutes(a.minutes)}</span>
+              <span className="min-w-0 flex-1 truncate text-[0.7647rem] text-foreground">{a.name}</span>
+              <span className="shrink-0 text-[0.6471rem] leading-5 text-(--accent)">✓ {fmtMinutes(a.minutes)}</span>
             </span>
           )
         })}
@@ -131,25 +133,26 @@ export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay }: {
   const hasPlan = !!goal.plan
   let progress = ''
   if (t && week?.plan_status === 'ready' && t.planned_sessions) {
-    progress = `${t.done_sessions} of ${t.planned_sessions}`
-    if (t.planned_minutes) progress += ` · ${fmtMinutes(t.done_minutes)} of ~${fmtMinutes(t.planned_minutes)}`
+    progress = `${t.done_sessions}/${t.planned_sessions} done`
   } else if (t) {
     const n = t.done_sessions + t.extra_sessions
-    progress = n ? `${n} workout${n === 1 ? '' : 's'} · ${fmtMinutes(t.done_minutes)}` : 'No workouts yet'
+    progress = n ? `${n} workout${n === 1 ? '' : 's'}` : 'No workouts yet'
   }
   const reading = loading && hasPlan && !week
 
   return (
-    <div className="coach-pins shrink-0 border-b border-(--border) bg-(--bg) px-3 py-2">
+    <>
+    {open && <div className="week-dim" onClick={() => setOpen(false)} aria-hidden />}
+    <div className={cn('coach-pins relative shrink-0 border-b border-(--border) bg-(--bg) px-3 py-2', open && 'z-[46]')}>
       <div className="mx-auto max-w-2xl overflow-hidden rounded-xl border border-border bg-(--bg-surface) shadow-sm">
         <button onClick={onOpenPlan}
           className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-secondary">
           <MapIcon className="size-4 shrink-0 text-(--accent)" />
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[0.8125rem] font-medium text-foreground">
+            <span className="block truncate text-[0.7647rem] font-medium text-foreground">
               {hasPlan ? planLine(week, goal) : 'No plan yet'}
             </span>
-            <span className="block truncate text-[0.6875rem] text-muted-foreground">
+            <span className="block truncate text-[0.6471rem] text-muted-foreground">
               {hasPlan ? (week?.focus || 'Your plan') : 'Upload it or tell Rabbit about it'}
             </span>
           </span>
@@ -160,10 +163,10 @@ export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay }: {
             className="flex w-full items-center gap-2 px-3 pb-2 pt-1.5 text-left">
             <span className="min-w-0 flex-1">
               <span className="flex items-baseline gap-2">
-                <span className="text-[0.625rem] font-semibold uppercase tracking-widest text-muted-foreground">
+                <span className="truncate text-[0.5882rem] font-semibold uppercase tracking-widest text-muted-foreground">
                   This week{week ? ` · ${fmtRange(week.start, week.end)}` : ''}
                 </span>
-                <span className="ml-auto truncate text-[0.6875rem] text-muted-foreground">
+                <span className="ml-auto shrink-0 text-[0.6471rem] text-muted-foreground">
                   {reading ? 'Reading your plan…' : progress}
                 </span>
               </span>
@@ -186,15 +189,21 @@ export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay }: {
           </button>
           {open && week && (
             <div className="max-h-[42vh] overflow-y-auto overscroll-contain border-t border-border px-1 py-1">
-              {week.garmin_error && <p className="px-2 py-1 text-[0.6875rem] text-(--warning)">{week.garmin_error}</p>}
-              {week.plan_status === 'error' && <p className="px-2 py-1 text-[0.6875rem] text-muted-foreground">Couldn't read this week from your plan. Showing what you've done.</p>}
-              {week.plan_status === 'over_budget' && <p className="px-2 py-1 text-[0.6875rem] text-muted-foreground">Planned sessions show up tomorrow (today's limit is used up).</p>}
+              {week.garmin_error && <p className="px-2 py-1 text-[0.6471rem] text-(--warning)">{week.garmin_error}</p>}
+              {week.plan_status === 'error' && <p className="px-2 py-1 text-[0.6471rem] text-muted-foreground">Couldn't read this week from your plan. Showing what you've done.</p>}
+              {week.plan_status === 'over_budget' && <p className="px-2 py-1 text-[0.6471rem] text-muted-foreground">Planned sessions show up tomorrow (today's limit is used up).</p>}
+              {t && (t.planned_minutes > 0 || t.done_minutes > 0) && (
+                <p className="px-2 pb-1 pt-1 text-[0.7059rem] text-muted-foreground">
+                  {fmtMinutes(t.done_minutes)} done{t.planned_minutes ? ` of ~${fmtMinutes(t.planned_minutes)} planned` : ''}
+                </p>
+              )}
               {week.days.map((d) => <DayRow key={d.date} day={d} onAsk={onAskDay} />)}
-              <p className="px-2 pb-1 pt-0.5 text-[0.625rem] text-muted-foreground">Tap a day to ask Rabbit about it.</p>
+              <p className="px-2 pb-1 pt-0.5 text-[0.5882rem] text-muted-foreground">Tap a day to ask Rabbit about it.</p>
             </div>
           )}
         </div>
       </div>
     </div>
+    </>
   )
 }

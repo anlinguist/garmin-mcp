@@ -56,25 +56,25 @@ export const ToolCallCard = memo(function ToolCallCard({ toolCall }: { toolCall:
         <span className={cn('truncate text-xs font-semibold', expanded ? 'text-foreground' : 'text-muted-foreground')}>
           {toolLabel(toolCall.toolName, toolCall.params)}
         </span>
-        {hasDetails && <span className="ml-1 text-[0.625rem] text-muted-foreground/50">{expanded ? '▾' : '▸'}</span>}
+        {hasDetails && <span className="ml-1 text-[0.5882rem] text-muted-foreground/50">{expanded ? '▾' : '▸'}</span>}
       </div>
       <div className={`grid transition-[grid-template-rows] duration-200 ease-out ${expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
         <div className="min-h-0 overflow-hidden">
           <div className="space-y-3 bg-secondary/20 p-3">
             {Object.keys(toolCall.params).length > 0 && (
               <div>
-                <span className="mb-1 block pl-1 text-[0.625rem] font-bold uppercase tracking-widest text-muted-foreground">Asked Garmin for</span>
-                <pre className="overflow-x-auto rounded-md border border-border bg-background p-2.5 font-mono text-[0.6875rem] text-foreground shadow-sm">
+                <span className="mb-1 block pl-1 text-[0.5882rem] font-bold uppercase tracking-widest text-muted-foreground">Asked Garmin for</span>
+                <pre className="overflow-x-auto rounded-md border border-border bg-background p-2.5 font-mono text-[0.6471rem] text-foreground shadow-sm">
                   {JSON.stringify(toolCall.params, null, 2)}
                 </pre>
               </div>
             )}
             {(toolCall.result != null || toolCall.error) && (
               <div>
-                <span className={`mb-1 block pl-1 text-[0.625rem] font-bold uppercase tracking-widest ${toolCall.error ? 'text-destructive' : 'text-muted-foreground'}`}>
+                <span className={`mb-1 block pl-1 text-[0.5882rem] font-bold uppercase tracking-widest ${toolCall.error ? 'text-destructive' : 'text-muted-foreground'}`}>
                   {toolCall.error ? 'Problem' : 'What came back'}
                 </span>
-                <pre className={cn('max-h-48 overflow-auto rounded-md border bg-background p-2.5 font-mono text-[0.625rem] text-muted-foreground shadow-sm',
+                <pre className={cn('max-h-48 overflow-auto rounded-md border bg-background p-2.5 font-mono text-[0.5882rem] text-muted-foreground shadow-sm',
                   toolCall.error ? 'border-destructive/50 text-destructive' : 'border-border')}>
                   {toolCall.error ?? JSON.stringify(toolCall.result, null, 2)}
                 </pre>
@@ -100,7 +100,7 @@ export const ToolCallGroup = memo(function ToolCallGroup({ toolCalls }: { toolCa
         <span className="truncate text-xs font-semibold text-muted-foreground">
           {running ? 'Checking your Garmin data…' : `Checked ${toolCalls.length} things in Garmin`}
         </span>
-        <span className="ml-1 text-[0.625rem] text-muted-foreground/50">{expanded ? '▾' : '▸'}</span>
+        <span className="ml-1 text-[0.5882rem] text-muted-foreground/50">{expanded ? '▾' : '▸'}</span>
       </div>
       <div className={`grid transition-[grid-template-rows] duration-200 ease-out ${expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
         <div className="min-h-0 overflow-hidden">

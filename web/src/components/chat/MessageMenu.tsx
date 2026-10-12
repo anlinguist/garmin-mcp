@@ -86,7 +86,7 @@ export function MessageMenu({ target, onClose, onDiscuss, onToast }: {
 function MenuItem({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }) {
   return (
     <button role="menuitem" onClick={onClick}
-      className="flex w-full items-center justify-between gap-6 px-4 py-2.5 text-left text-[0.9375rem] text-(--text) active:bg-(--bg-inset)">
+      className="flex w-full items-center justify-between gap-6 px-4 py-2.5 text-left text-[0.8824rem] text-(--text) active:bg-(--bg-inset)">
       {label}<span className="text-(--text-secondary)">{icon}</span>
     </button>
   )
@@ -104,7 +104,7 @@ function SelectSheet({ text, onClose }: { text: string; onClose: () => void }) {
           <h2 className="modal-title">Select text</h2>
           <button className="modal-close" aria-label="Close" onClick={onClose}><X className="size-4" /></button>
         </div>
-        <div className="modal-body selectable overflow-y-auto whitespace-pre-wrap p-4 pb-[max(16px,env(safe-area-inset-bottom))] text-[0.9375rem] leading-relaxed">
+        <div className="modal-body selectable overflow-y-auto whitespace-pre-wrap p-4 pb-[max(16px,env(safe-area-inset-bottom))] text-[0.8824rem] leading-relaxed">
           {text}
         </div>
       </div>

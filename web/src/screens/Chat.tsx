@@ -250,7 +250,7 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
             <span className="block truncate font-display text-lg leading-tight text-(--brand)">
               {pending ? 'New chat' : isCoach || !thread ? 'Rabbit' : thread.title || 'New chat'}
             </span>
-            <span className="block truncate text-[0.6875rem] leading-tight text-muted-foreground">
+            <span className="block truncate text-[0.6471rem] leading-tight text-muted-foreground">
               {goal ? `${goal.title}${countdown ? ` · ${countdown}` : ''}` : 'No goal set'}
               {isCoach ? ' · Coach log' : ''}
             </span>
@@ -288,7 +288,7 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
           <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col">
             {pending.seedMsg && (
               <div className="rounded-xl border border-dashed border-border p-2">
-                <p className="mb-1 pl-1 text-[0.625rem] font-semibold uppercase tracking-widest text-muted-foreground">From your coach log</p>
+                <p className="mb-1 pl-1 text-[0.5882rem] font-semibold uppercase tracking-widest text-muted-foreground">From your coach log</p>
                 <CoachHeader label={pending.seedMsg.label} ts={pending.seedMsg.ts} />
                 <MessageBubble message={pending.seedMsg} showLabel={false} />
               </div>
@@ -302,7 +302,7 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
                 <div className="mt-3 flex w-full max-w-[300px] flex-col gap-2">
                   {TOPIC_SUGGESTIONS.map((q) => (
                     <button key={q} disabled={!me.chat.available || busy}
-                      className="w-full cursor-pointer rounded-(--radius) border border-border bg-background px-3.5 py-2.5 text-left text-[0.8125rem] text-foreground/80 transition-all hover:bg-secondary disabled:opacity-50"
+                      className="w-full cursor-pointer rounded-(--radius) border border-border bg-background px-3.5 py-2.5 text-left text-[0.7647rem] text-foreground/80 transition-all hover:bg-secondary disabled:opacity-50"
                       onClick={() => void sendPending(q, [])}>{q}</button>
                   ))}
                 </div>
@@ -314,16 +314,16 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
         <div className="flex flex-1 flex-col justify-end overflow-y-auto px-4 py-4">
           <div className="mx-auto w-full max-w-2xl">
             <div className="mb-3 flex items-center gap-2 pl-1"><RabbitLogo size={22} />
-              <span className="text-[0.6875rem] font-semibold uppercase tracking-widest text-muted-foreground">Rabbit</span></div>
-            <div className="max-w-[85%] rounded-xl rounded-tl-sm border border-border bg-background px-3.5 py-2.5 text-[0.875rem] leading-relaxed shadow-sm">
+              <span className="text-[0.6471rem] font-semibold uppercase tracking-widest text-muted-foreground">Rabbit</span></div>
+            <div className="max-w-[85%] rounded-xl rounded-tl-sm border border-border bg-background px-3.5 py-2.5 text-[0.8235rem] leading-relaxed shadow-sm">
               <p>Hi{me.profile.name ? ` ${me.profile.name}` : ''}! I'm Rabbit, your training pacer.</p>
               <p className="mt-1.5">What are you training for? Tell me the race and when it is. If you have a plan from a coach or an app, send it as a PDF or screenshots and I'll keep it in mind for every brief and workout note.</p>
             </div>
             <div className="mt-3 flex flex-wrap gap-2 pl-1">
-              <button className="rounded-full border border-border bg-background px-3 py-1.5 text-[0.8125rem] hover:bg-secondary"
+              <button className="rounded-full border border-border bg-background px-3 py-1.5 text-[0.7647rem] hover:bg-secondary"
                 onClick={() => tellRabbit("I'm training for ")}>I'm training for…</button>
               <label htmlFor={ATTACH_INPUT_ID} onClick={() => setDraft((d) => ({ text: "Here's my training plan.", n: (d?.n ?? 0) + 1 }))}
-                className="cursor-pointer rounded-full border border-border bg-background px-3 py-1.5 text-[0.8125rem] hover:bg-secondary">Upload my plan</label>
+                className="cursor-pointer rounded-full border border-border bg-background px-3 py-1.5 text-[0.7647rem] hover:bg-secondary">Upload my plan</label>
             </div>
           </div>
         </div>
@@ -333,14 +333,14 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
           <p className="mb-2 font-display text-2xl leading-tight text-(--brand)">
             {isCoach ? 'Your coach log' : 'Ready when you are.'}
           </p>
-          <p className="mb-5 text-[0.8125rem] text-muted-foreground">
+          <p className="mb-5 text-[0.7647rem] text-muted-foreground">
             {isCoach ? 'Morning briefs and workout notes land here. Ask anything about your training.'
               : 'Ask about your training, recovery or what to do next.'}
           </p>
           <div className="flex w-full max-w-[300px] flex-col gap-2">
             {suggestions.map((s) => (
               <button key={s} disabled={!me.chat.available}
-                className="w-full cursor-pointer rounded-(--radius) border border-border bg-background px-3.5 py-2.5 text-left text-[0.8125rem] text-foreground/80 transition-all hover:bg-secondary disabled:opacity-50"
+                className="w-full cursor-pointer rounded-(--radius) border border-border bg-background px-3.5 py-2.5 text-left text-[0.7647rem] text-foreground/80 transition-all hover:bg-secondary disabled:opacity-50"
                 onClick={() => void (isCoach ? sendFromLog(s, []) : send(s))}>{s}</button>
             ))}
           </div>
@@ -375,7 +375,7 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
               const seed = m.turnKind === 'seed'
               return (
                 <div key={m.id} className={seed ? 'rounded-xl border border-dashed border-border p-2' : ''}>
-                  {seed && <p className="mb-1 pl-1 text-[0.625rem] font-semibold uppercase tracking-widest text-muted-foreground">From your coach log</p>}
+                  {seed && <p className="mb-1 pl-1 text-[0.5882rem] font-semibold uppercase tracking-widest text-muted-foreground">From your coach log</p>}
                   <CoachHeader label={m.label} ts={m.ts} />
                   <MessageBubble message={m} showLabel={r.showLabel} pressProps={press} />
                   {isCoach && m.turnKind === 'proactive' && m.turnId && thread && (

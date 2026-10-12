@@ -69,7 +69,7 @@ export function CoachingSettings({ me, onChange, onDevDone }: {
       <p className="text-xs text-(--text-muted)">Time zone: {s.timezone}</p>
       {me.dev.tools.length > 0 && (
         <div className="mt-2 flex flex-col gap-2 rounded-(--radius) border border-dashed border-(--warning)/40 p-2">
-          <span className="flex items-center gap-1.5 text-[0.6875rem] font-semibold uppercase tracking-widest text-(--warning)">
+          <span className="flex items-center gap-1.5 text-[0.6471rem] font-semibold uppercase tracking-widest text-(--warning)">
             <FlaskConical className="size-3.5" /> Dev (fake Garmin)
           </span>
           <div className="flex flex-wrap gap-2">

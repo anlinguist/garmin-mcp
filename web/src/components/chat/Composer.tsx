@@ -98,7 +98,7 @@ export function Composer({ disabled, streaming, onSend, onStop, placeholder, dra
 
   return (
     <div
-      className={cn('composer-bar relative z-40 shrink-0 border-t border-(--border) bg-(--bg) px-3 pb-[max(10px,env(safe-area-inset-bottom))] pt-2.5 transition-colors duration-200',
+      className={cn('composer-bar relative z-40 shrink-0 border-t border-(--border) bg-(--bg) px-3 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 transition-colors duration-200',
         dragging && 'border-accent bg-accent/5')}
       onDragEnter={(e) => { if (e.dataTransfer.types.includes('Files')) { dragDepth.current++; setDragging(true) } }}
       onDragLeave={() => { dragDepth.current = Math.max(0, dragDepth.current - 1); if (!dragDepth.current) setDragging(false) }}
@@ -117,7 +117,7 @@ export function Composer({ disabled, streaming, onSend, onStop, placeholder, dra
             <div key={f.localId} className="relative size-16 overflow-hidden rounded-lg border border-border bg-secondary">
               <img src={f.preview} alt={f.name} className={cn('size-full object-cover', f.status === 'uploading' && 'opacity-50')} />
               {f.status === 'uploading' && <span className="absolute inset-0 flex items-center justify-center"><span className="thinking-dots flex gap-[3px]"><span /><span /><span /></span></span>}
-              {f.status === 'error' && <span className="absolute inset-x-0 bottom-0 bg-(--danger) px-1 text-[0.5625rem] text-white" title={f.error}>Failed</span>}
+              {f.status === 'error' && <span className="absolute inset-x-0 bottom-0 bg-(--danger) px-1 text-[0.5294rem] text-white" title={f.error}>Failed</span>}
               <button aria-label="Remove" onClick={() => remove(f.localId)}
                 className="absolute right-0.5 top-0.5 flex size-5 items-center justify-center rounded-full bg-black/60 text-white">
                 <X className="size-3" />
@@ -129,7 +129,7 @@ export function Composer({ disabled, streaming, onSend, onStop, placeholder, dra
                 f.status === 'error' ? 'border-(--danger)/50' : 'border-border')}>
               <FileText className="size-3 shrink-0 text-accent" />
               <span className="max-w-[120px] truncate font-medium text-foreground/80">{f.name}</span>
-              <span className="font-mono text-[0.6875rem] text-muted-foreground">
+              <span className="font-mono text-[0.6471rem] text-muted-foreground">
                 {f.status === 'uploading' ? '…' : f.status === 'error' ? 'failed' : formatFileSize(f.size)}
               </span>
               <button aria-label="Remove" onClick={() => remove(f.localId)}
@@ -141,10 +141,10 @@ export function Composer({ disabled, streaming, onSend, onStop, placeholder, dra
         </div>
       )}
       {(notice || files.some((f) => f.status === 'error')) && (
-        <p className="mb-1.5 text-[0.6875rem] text-(--danger)">{notice ?? files.find((f) => f.error)?.error}</p>
+        <p className="mb-1.5 text-[0.6471rem] text-(--danger)">{notice ?? files.find((f) => f.error)?.error}</p>
       )}
 
-      <div className="flex items-end gap-2 rounded-(--radius-lg) border border-(--border-strong) bg-(--bg-surface) py-2 pl-1.5 pr-2 shadow-sm focus-within:border-(--accent)">
+      <div className="flex items-end gap-2 rounded-(--radius-lg) border border-(--border-strong) bg-(--bg-surface) py-1.5 pl-1.5 pr-1.5 shadow-sm focus-within:border-(--accent)">
         <button type="button" aria-label="Attach" onClick={() => picker.current?.click()}
           disabled={files.length >= MAX_FILES}
           className="flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-40">
@@ -168,7 +168,7 @@ export function Composer({ disabled, streaming, onSend, onStop, placeholder, dra
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit() }
           }}
           placeholder={placeholder}
-          className="max-h-[calc(1.375em*5+12px)] flex-1 resize-none self-center border-none bg-transparent p-0 py-[5px] text-base leading-[1.375] text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-0"
+          className="chat-text max-h-[calc(1.375em*5+12px)] flex-1 resize-none self-center border-none bg-transparent p-0 py-[5px] text-base leading-[1.375] text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-0"
           style={{ overflowY: 'auto' }}
         />
         {streaming ? (

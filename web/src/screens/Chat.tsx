@@ -316,7 +316,7 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
                 {pending.seedMsg ? 'What would you like to ask about this?' : 'Ready when you are.'}
               </p>
               {!pending.seedMsg && (
-                <div className="mt-3 flex w-full max-w-[300px] flex-col gap-2">
+                <div className="chat-suggestions mt-3 flex w-full max-w-[300px] flex-col gap-2">
                   {TOPIC_SUGGESTIONS.map((q) => (
                     <button key={q} disabled={!me.chat.available || busy}
                       className="w-full cursor-pointer rounded-(--radius) border border-border bg-background px-3.5 py-2.5 text-left text-[0.7647rem] text-foreground/80 transition-all hover:bg-secondary disabled:opacity-50"
@@ -354,7 +354,7 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
             {isCoach ? 'Morning briefs and workout notes land here. Ask anything about your training.'
               : 'Ask about your training, recovery or what to do next.'}
           </p>
-          <div className="flex w-full max-w-[300px] flex-col gap-2">
+          <div className="chat-suggestions flex w-full max-w-[300px] flex-col gap-2">
             {suggestions.map((s) => (
               <button key={s} disabled={!me.chat.available}
                 className="w-full cursor-pointer rounded-(--radius) border border-border bg-background px-3.5 py-2.5 text-left text-[0.7647rem] text-foreground/80 transition-all hover:bg-secondary disabled:opacity-50"

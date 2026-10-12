@@ -172,6 +172,7 @@ html.msg-menu-open .selectable, html.msg-menu-open .selectable * { -webkit-user-
 html.kb-open .composer-bar { padding-bottom: 4px; }
 /* Typing: give the feed the room; the pinned plan cards come back when the keyboard closes. */
 html.kb-open .coach-pins { display: none; }
+html.kb-open .chat-suggestions { display: none; } /* typing: you've got your own question */
 /* The expanded week: a drawer that slides down over the feed while everything else dims. */
 .week-dim { position: fixed; inset: 0; z-index: 45; background: rgba(0, 0, 0, 0.45);
   opacity: 0; pointer-events: none; transition: opacity 0.22s ease; }

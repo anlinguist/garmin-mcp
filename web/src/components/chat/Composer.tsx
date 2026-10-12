@@ -38,8 +38,10 @@ export function Composer({ disabled, streaming, onSend, onStop, placeholder, dra
     if (!ta) return
     ta.style.height = 'auto'
     if (!ta.value) return
-    const line = parseFloat(getComputedStyle(ta).lineHeight) || 22
-    ta.style.height = `${Math.min(ta.scrollHeight, line * 5 + 12)}px`
+    const cs = getComputedStyle(ta)
+    const line = parseFloat(cs.lineHeight) || 22
+    const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0)
+    ta.style.height = `${Math.min(ta.scrollHeight, line * 5 + pad)}px`
   }, [])
   useEffect(resize, [input, resize])
   useEffect(() => {
@@ -144,8 +146,10 @@ export function Composer({ disabled, streaming, onSend, onStop, placeholder, dra
         <p className="mb-1.5 text-[0.6471rem] text-(--danger)">{notice ?? files.find((f) => f.error)?.error}</p>
       )}
 
-      <div className="flex items-end gap-2 rounded-(--radius-lg) border border-(--border-strong) bg-(--bg-surface) py-1.5 pl-1.5 pr-1.5 shadow-sm focus-within:border-(--accent)">
-        <button type="button" aria-label="Attach" onClick={() => picker.current?.click()}
+      {/* --row: height of one line of text (or the 36px send button, if taller). Buttons sit
+          centered on that first line and stay at the bottom as the text grows. */}
+      <div style={{ ['--row' as string]: 'max(36px, 1.375rem + 10px)' }} className="flex items-end gap-2 rounded-(--radius-lg) border border-(--border-strong) bg-(--bg-surface) py-1.5 pl-1.5 pr-1.5 shadow-sm focus-within:border-(--accent)">
+        <button type="button" aria-label="Attach" onClick={() => picker.current?.click()} style={{ marginBottom: 'calc((var(--row) - 32px) / 2)' }}
           disabled={files.length >= MAX_FILES}
           className="flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-40">
           <Paperclip className="size-[18px]" />
@@ -168,16 +172,16 @@ export function Composer({ disabled, streaming, onSend, onStop, placeholder, dra
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit() }
           }}
           placeholder={placeholder}
-          className="chat-text max-h-[calc(1.375em*5+12px)] flex-1 resize-none self-center border-none bg-transparent p-0 py-[5px] text-base leading-[1.375] text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-0"
+          className="chat-text max-h-[calc(1.375em*5+36px)] min-h-(--row) flex-1 resize-none border-none bg-transparent p-0 py-[max(5px,calc((36px-1.375rem)/2))] text-base leading-[1.375] text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-0"
           style={{ overflowY: 'auto' }}
         />
         {streaming ? (
-          <button type="button" aria-label="Stop" onClick={onStop}
+          <button type="button" aria-label="Stop" onClick={onStop} style={{ marginBottom: 'calc((var(--row) - 36px) / 2)' }}
             className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-destructive text-white shadow-sm transition-all hover:opacity-90 active:scale-95">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2" ry="2" /></svg>
           </button>
         ) : (
-          <button type="button" aria-label="Send" onClick={submit} disabled={!canSend}
+          <button type="button" aria-label="Send" onClick={submit} disabled={!canSend} style={{ marginBottom: 'calc((var(--row) - 36px) / 2)' }}
             className={cn('flex size-9 shrink-0 items-center justify-center rounded-full border-none shadow-sm transition-all',
               canSend
                 ? 'cursor-pointer bg-[var(--btn-approve-bg)] text-[var(--btn-approve-text)] hover:scale-105 hover:opacity-90 active:scale-95'

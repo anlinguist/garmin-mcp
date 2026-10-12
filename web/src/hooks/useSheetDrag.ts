@@ -20,7 +20,8 @@ const SNAP = 'cubic-bezier(0.16, 1, 0.3, 1)'
 
 type Sample = { y: number; t: number }
 
-export function useSheetDrag(onDismissed: () => void) {
+export function useSheetDrag(onDismissed: () => void, opts: { bodyDrags?: boolean } = {}) {
+  const bodyDrags = opts.bodyDrags ?? true
   const ref = useRef<HTMLDivElement | null>(null)
   const g = useRef<{ startY: number; active: boolean; samples: Sample[]; dy: number } | null>(null)
   const done = useRef(false)
@@ -46,8 +47,9 @@ export function useSheetDrag(onDismissed: () => void) {
     if (done.current) return
     const body = (e.target as HTMLElement).closest('.modal-body')
     const y = e.touches[0]!.clientY
-    g.current = { startY: y, active: !body || body.scrollTop <= 0, samples: [{ y, t: performance.now() }], dy: 0 }
-  }, [])
+    g.current = { startY: y, active: !body || (bodyDrags && body.scrollTop <= 0),
+      samples: [{ y, t: performance.now() }], dy: 0 }
+  }, [bodyDrags])
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
     const s = g.current

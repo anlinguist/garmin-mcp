@@ -171,8 +171,12 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
     const id = el.dataset.msgId
     const item = items.find((it): it is ChatMessage => it.kind === 'message' && it.id === id)
     if (!item || item.error) return
-    hapticTap()
+    hapticTap() // works where the hold timer counts as a gesture (Android)
     setMenu({ item, el, canDiscuss: isCoach && item.turnKind === 'proactive' && !!item.turnId })
+  }, () => {
+    // iOS (no Vibration API): tap again on the finger lift, which iOS treats as a real
+    // gesture. Skipped where vibrate exists, so Android doesn't buzz twice.
+    if (typeof navigator.vibrate !== 'function') hapticTap()
   })
 
   // The coach log stays a timeline: a message typed there starts a new topic thread.

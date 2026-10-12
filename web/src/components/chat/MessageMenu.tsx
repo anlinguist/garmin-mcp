@@ -33,12 +33,14 @@ export function MessageMenu({ target, onClose, onDiscuss, onToast }: {
   const isUser = target.item.role === 'user'
   const text = target.item.text
 
-  // Lift the pressed bubble above the backdrop for as long as the menu is open.
+  // Lift the pressed bubble above the backdrop while the menu is open; drop it once the
+  // Select-text sheet takes over (a lifted bubble would sit on top of the sheet).
   useEffect(() => {
+    if (selecting) return
     const el = target.el
     el.classList.add('msg-lifted')
     return () => el.classList.remove('msg-lifted')
-  }, [target.el])
+  }, [target.el, selecting])
 
   useLayoutEffect(() => {
     const r = target.el.getBoundingClientRect()
@@ -86,7 +88,8 @@ function MenuItem({ icon, label, onClick }: { icon: React.ReactNode; label: stri
 
 /** Plain selectable text, for copying part of a message. */
 function SelectSheet({ text, onClose }: { text: string; onClose: () => void }) {
-  const drag = useSheetDrag(onClose)
+  // Drag-to-dismiss from the handle/header only: in the body, drags extend the selection.
+  const drag = useSheetDrag(onClose, { bodyDrags: false })
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} {...drag}>

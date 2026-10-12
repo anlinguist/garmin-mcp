@@ -2,7 +2,7 @@
 // which expands into planned vs. done by day. Weeks follow the plan's own weeks.
 import { useEffect, useRef, useState } from 'react'
 import {
-  Activity, Bike, Check, MessageCircle, ChevronRight, Dumbbell, Footprints, Layers, Moon, Waves,
+  Activity, Bike, Check, MessageCircle, ChevronRight, Dumbbell, Footprints, Layers, Map as MapIcon, Moon, Waves,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Goal, PlannedSession, PlanWeek, Sport, WeekDay } from '@/lib/api'
@@ -221,16 +221,19 @@ export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay }: {
         <div className={cn('week-drawer', open && 'week-drawer--open')} aria-hidden={!open} inert={!open}>
           <div className="min-h-0 overflow-hidden">
           <div className="max-h-[52vh] overflow-y-auto overscroll-contain pb-1">
-            <div className="flex items-center gap-2 px-3 pb-1 pt-1.5">
-              <span className="min-w-0 flex-1 truncate text-[0.6471rem] text-muted-foreground">
-                {!hasPlan ? 'No plan yet'
-                  : t && t.planned_minutes > 0 ? `${fmtMinutes(t.done_minutes)} of ~${fmtMinutes(t.planned_minutes)} this week` : ''}
+            <button onClick={() => { setOpen(false); onOpenPlan() }}
+              className="flex w-full items-center gap-3 border-b border-(--border) px-3 py-2.5 text-left active:bg-(--bg-inset)">
+              <span className="flex size-[30px] shrink-0 items-center justify-center rounded-lg bg-(--accent-subtle) text-(--accent)">
+                <MapIcon className="size-4" />
               </span>
-              <button onClick={() => { setOpen(false); onOpenPlan() }}
-                className="inline-flex shrink-0 items-center gap-0.5 text-[0.6471rem] font-medium text-(--accent) active:opacity-70">
-                {hasPlan ? 'Open plan' : 'Add plan'} <ChevronRight className="size-3.5" />
-              </button>
-            </div>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[0.8235rem] font-medium text-foreground">{hasPlan ? 'Your plan' : 'Add your plan'}</span>
+                <span className="block truncate text-[0.6471rem] text-muted-foreground">
+                  {hasPlan ? (week?.focus?.replace(/\s*\([^)]*\)\s*$/, '') || goal.title) : 'Upload it or tell Rabbit about it'}
+                </span>
+              </span>
+              <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+            </button>
             {week?.garmin_error && <p className="px-2 py-1 text-[0.6471rem] text-(--warning)">{week.garmin_error}</p>}
             {week?.plan_status === 'error' && <p className="px-2 py-1 text-[0.6471rem] text-muted-foreground">Couldn't read this week from your plan. Showing what you've done.</p>}
             {week?.plan_status === 'over_budget' && <p className="px-2 py-1 text-[0.6471rem] text-muted-foreground">Planned sessions show up tomorrow (today's limit is used up).</p>}

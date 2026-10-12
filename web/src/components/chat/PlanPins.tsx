@@ -97,8 +97,8 @@ function DayRow({ day, openKey, onToggle, onAsk }: {
   const date = new Date(`${day.date}T12:00:00`)
   const list = items(day)
   return (
-    <div className={cn('flex gap-3 px-2 py-1.5', day.today && 'bg-(--accent-subtle)')}>
-      <span className="w-9 shrink-0 pt-1 text-center leading-tight">
+    <div className={cn('flex gap-3 px-2 py-1.5', list.length <= 1 && 'items-center', day.today && 'bg-(--accent-subtle)')}>
+      <span className={cn('w-9 shrink-0 text-center leading-tight', list.length > 1 && 'pt-1')}>
         <span className={cn('block text-[0.6471rem] font-semibold uppercase', day.today ? 'text-(--accent)' : 'text-muted-foreground')}>{day.weekday}</span>
         <span className="block text-[0.7647rem] text-foreground/80">{date.getDate()}</span>
       </span>

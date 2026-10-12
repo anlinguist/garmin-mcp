@@ -22,17 +22,17 @@ export function ApprovalCard({ item, onDecide }: {
         <ShieldQuestion className="size-4 shrink-0 text-(--accent)" />
         <span className="text-sm font-medium">{item.summary.title}</span>
         {item.status !== 'pending' && (
-          <span className={`ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+          <span className={`ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wider ${
             item.status === 'approved' ? 'bg-(--success-subtle) text-(--success)' : 'bg-(--danger-subtle) text-(--danger)'}`}>
             {item.status === 'approved' ? <><Check className="size-3" /> Approved</> : <><X className="size-3" /> Declined</>}
           </span>
         )}
       </div>
       {item.summary.detail && <p className="mb-2 text-xs text-(--text-secondary)">{item.summary.detail}</p>}
-      <dl className="flex flex-col gap-1.5 text-[13px]">
+      <dl className="flex flex-col gap-1.5 text-[0.8125rem]">
         {item.summary.changes.map((c, i) => (
           <div key={i} className="rounded-md bg-(--bg-inset)/60 px-2 py-1.5">
-            <dt className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{c.field}</dt>
+            <dt className="text-[0.625rem] font-semibold uppercase tracking-widest text-muted-foreground">{c.field}</dt>
             <dd className="break-words">
               {c.from && <span className="text-(--text-muted) line-through decoration-(--danger)/50">{c.from}</span>}
               {c.from && <span className="px-1 text-muted-foreground">→</span>}

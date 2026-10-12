@@ -11,7 +11,7 @@ export function CoachHeader({ label, ts }: { label: 'brief' | 'workout' | 'note'
   if (!label) return null
   const Icon = label === 'brief' ? Sunrise : label === 'workout' ? Watch : NotebookPen
   return (
-    <div className="mb-1 flex items-center gap-1.5 pl-1 text-[11px] font-semibold uppercase tracking-widest text-(--accent)">
+    <div className="mb-1 flex items-center gap-1.5 pl-1 text-[0.6875rem] font-semibold uppercase tracking-widest text-(--accent)">
       <Icon className="size-3.5" />
       {label === 'brief' ? 'Morning brief' : label === 'workout' ? 'Workout note' : 'Coach note'}
       <span className="font-normal normal-case tracking-normal text-muted-foreground">· {fmtDay(ts)}</span>
@@ -22,7 +22,7 @@ export function CoachHeader({ label, ts }: { label: 'brief' | 'workout' | 'note'
 export function DiscussButton({ onClick, busy }: { onClick: () => void; busy: boolean }) {
   return (
     <button onClick={onClick} disabled={busy}
-      className="mt-1 ml-1 inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-50">
+      className="mt-1 ml-1 inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-[0.6875rem] text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-50">
       <MessagesSquare className="size-3" /> Discuss
     </button>
   )
@@ -43,8 +43,8 @@ export function ThreadLinkCard({ thread, onOpen, pressProps }: {
       className="msg-press flex w-full cursor-pointer items-center gap-2.5 rounded-xl border border-dashed border-(--accent)/40 bg-(--accent-subtle) px-3 py-2 text-left transition-colors hover:bg-(--accent)/10 aria-disabled:opacity-50">
       <MessageSquareText className="size-4 shrink-0 text-(--accent)" />
       <span className="min-w-0">
-        <span className="block text-[10px] font-semibold uppercase tracking-widest text-(--accent)">Chat started</span>
-        <span className="block truncate text-[13px] text-foreground">{title}</span>
+        <span className="block text-[0.625rem] font-semibold uppercase tracking-widest text-(--accent)">Chat started</span>
+        <span className="block truncate text-[0.8125rem] text-foreground">{title}</span>
       </span>
     </div>
   )

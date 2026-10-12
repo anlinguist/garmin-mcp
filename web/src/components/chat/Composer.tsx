@@ -38,7 +38,8 @@ export function Composer({ disabled, streaming, onSend, onStop, placeholder, dra
     if (!ta) return
     ta.style.height = 'auto'
     if (!ta.value) return
-    ta.style.height = `${Math.min(ta.scrollHeight, 22 * 5 + 12)}px`
+    const line = parseFloat(getComputedStyle(ta).lineHeight) || 22
+    ta.style.height = `${Math.min(ta.scrollHeight, line * 5 + 12)}px`
   }, [])
   useEffect(resize, [input, resize])
   useEffect(() => {
@@ -116,7 +117,7 @@ export function Composer({ disabled, streaming, onSend, onStop, placeholder, dra
             <div key={f.localId} className="relative size-16 overflow-hidden rounded-lg border border-border bg-secondary">
               <img src={f.preview} alt={f.name} className={cn('size-full object-cover', f.status === 'uploading' && 'opacity-50')} />
               {f.status === 'uploading' && <span className="absolute inset-0 flex items-center justify-center"><span className="thinking-dots flex gap-[3px]"><span /><span /><span /></span></span>}
-              {f.status === 'error' && <span className="absolute inset-x-0 bottom-0 bg-(--danger) px-1 text-[9px] text-white" title={f.error}>Failed</span>}
+              {f.status === 'error' && <span className="absolute inset-x-0 bottom-0 bg-(--danger) px-1 text-[0.5625rem] text-white" title={f.error}>Failed</span>}
               <button aria-label="Remove" onClick={() => remove(f.localId)}
                 className="absolute right-0.5 top-0.5 flex size-5 items-center justify-center rounded-full bg-black/60 text-white">
                 <X className="size-3" />
@@ -128,7 +129,7 @@ export function Composer({ disabled, streaming, onSend, onStop, placeholder, dra
                 f.status === 'error' ? 'border-(--danger)/50' : 'border-border')}>
               <FileText className="size-3 shrink-0 text-accent" />
               <span className="max-w-[120px] truncate font-medium text-foreground/80">{f.name}</span>
-              <span className="font-mono text-[11px] text-muted-foreground">
+              <span className="font-mono text-[0.6875rem] text-muted-foreground">
                 {f.status === 'uploading' ? '…' : f.status === 'error' ? 'failed' : formatFileSize(f.size)}
               </span>
               <button aria-label="Remove" onClick={() => remove(f.localId)}
@@ -140,7 +141,7 @@ export function Composer({ disabled, streaming, onSend, onStop, placeholder, dra
         </div>
       )}
       {(notice || files.some((f) => f.status === 'error')) && (
-        <p className="mb-1.5 text-[11px] text-(--danger)">{notice ?? files.find((f) => f.error)?.error}</p>
+        <p className="mb-1.5 text-[0.6875rem] text-(--danger)">{notice ?? files.find((f) => f.error)?.error}</p>
       )}
 
       <div className="flex items-end gap-2 rounded-(--radius-lg) border border-(--border-strong) bg-(--bg-surface) py-2 pl-1.5 pr-2 shadow-sm focus-within:border-(--accent)">
@@ -167,7 +168,7 @@ export function Composer({ disabled, streaming, onSend, onStop, placeholder, dra
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit() }
           }}
           placeholder={placeholder}
-          className="max-h-[122px] flex-1 resize-none self-center border-none bg-transparent p-0 py-[5px] text-base leading-[22px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-0"
+          className="max-h-[calc(1.375em*5+12px)] flex-1 resize-none self-center border-none bg-transparent p-0 py-[5px] text-base leading-[1.375] text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-0"
           style={{ overflowY: 'auto' }}
         />
         {streaming ? (

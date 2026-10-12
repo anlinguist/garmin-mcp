@@ -1,3 +1,11 @@
+/* Text size follows the iPhone's Settings > Display & Brightness > Text Size (Dynamic Type):
+   -apple-system-body is 17px at the default size, like iMessage, and every rem scales with it.
+   iOS only (on macOS Safari it would be 13px); other browsers keep their own default. */
+@supports (font: -apple-system-body) and (-webkit-touch-callout: none) {
+  html { font: -apple-system-body; }
+}
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
 /* Rabbit-specific additions on top of Dolly's globals. */
 html, body, #root { height: 100%; }
 /* No iOS tap-highlight flash: Rabbit gives its own press feedback (bubbles shrink/lift). */
@@ -139,7 +147,7 @@ html.msg-menu-open .selectable, html.msg-menu-open .selectable * { -webkit-user-
 .rabbit-toast {
   position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom)); z-index: 70;
   transform: translateX(-50%); padding: 6px 14px; border-radius: 999px;
-  background: var(--text); color: var(--bg); font-size: 13px; box-shadow: var(--shadow-md); pointer-events: none;
+  background: var(--text); color: var(--bg); font-size: 0.8125rem; box-shadow: var(--shadow-md); pointer-events: none;
   animation: toast-in 1.6s ease both;
 }
 @keyframes toast-in {

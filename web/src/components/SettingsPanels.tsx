@@ -84,7 +84,7 @@ export function SettingsPanels({ me, goal, onEditGoal, onChange, onDevDone }: {
               </p>
             </div>
             {me.garmin.fake && (
-              <span className="rounded-full bg-(--warning-subtle) px-2 py-0.5 text-[10px] text-(--warning)"
+              <span className="rounded-full bg-(--warning-subtle) px-2 py-0.5 text-[0.625rem] text-(--warning)"
                 title="Dev mode: try mfa@, wrong@, 429@ or cf@ emails; MFA code 123456">FAKE</span>
             )}
           </div>

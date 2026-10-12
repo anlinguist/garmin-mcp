@@ -248,7 +248,7 @@
 
   body {
     font-family: var(--font-mono);
-    font-size: 14px;
+    font-size: 0.875rem;
     line-height: 1.55;
     color: var(--text);
     background: var(--bg);
@@ -411,7 +411,7 @@
 
 .modal-title {
   font-family: var(--font-display);
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 400;
   color: var(--text);
   margin: 0;
@@ -509,14 +509,14 @@
 
 .jr-card-title {
   font-family: var(--font-display);
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 400;
   color: var(--text);
   line-height: 1.3;
 }
 
 .jr-card-desc {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-muted);
   line-height: 1.5;
 }
@@ -561,25 +561,25 @@
 }
 
 .jr-heading--1 {
-  font-size: 22px;
+  font-size: 1.375rem;
 }
 
 .jr-heading--2 {
-  font-size: 18px;
+  font-size: 1.125rem;
 }
 
 .jr-heading--3 {
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 
 .jr-heading--4 {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
 }
 
 /* Text */
 .jr-text {
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.6;
   color: var(--text);
 }
@@ -623,14 +623,14 @@
 
 .jr-text--muted {
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 /* Badge */
 .jr-badge {
   display: inline-flex;
   align-items: center;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   font-family: var(--font-mono);
   padding: 2px 8px;
@@ -668,13 +668,13 @@
 .jr-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-family: var(--font-mono);
 }
 
 .jr-table caption {
   padding: 8px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-muted);
   text-align: left;
   caption-side: bottom;
@@ -685,7 +685,7 @@
   padding: 8px 10px;
   text-align: left;
   font-weight: 600;
-  font-size: 11px;
+  font-size: 0.6875rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-secondary);
@@ -721,7 +721,7 @@
   padding: 10px 14px;
   border-radius: var(--radius);
   border: 1px solid;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .jr-alert--info {
@@ -765,7 +765,7 @@
   align-items: center;
   justify-content: center;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   padding: 6px 16px;
   border-radius: var(--radius);
@@ -847,7 +847,7 @@
 
 .jr-gallery-caption {
   padding: 6px 10px;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   background: var(--bg-surface);
   border-top: 1px solid var(--border);
@@ -899,7 +899,7 @@
   padding: 8px 12px;
   background: linear-gradient(transparent, rgba(0, 0, 0, 0.6));
   color: #fff;
-  font-size: 13px;
+  font-size: 0.8125rem;
   border-top: none;
 }
 

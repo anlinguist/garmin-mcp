@@ -22,7 +22,7 @@ function Section({ title, onEdit, onTell, children }: {
       <div className="flex items-center gap-1">
         <h3 className="flex-1 font-medium">{title}</h3>
         {onTell && (
-          <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-[11px]" onClick={onTell}>
+          <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-[0.6875rem]" onClick={onTell}>
             <MessageCircle className="size-3.5" /> Tell Rabbit
           </Button>
         )}
@@ -116,7 +116,7 @@ export function MemorySheet({ goal, athlete, onChanged, onTell, onUploadPlan, on
             <Section title="Your plan" onEdit={goal.plan ? () => setEditing('plan') : undefined}>
               {editing === 'plan' ? (
                 <>
-                  <textarea className={`${area} min-h-[220px] font-mono text-[13px]`} value={plan} onChange={(e) => setPlan(e.target.value)} />
+                  <textarea className={`${area} min-h-[220px] font-mono text-[0.8125rem]`} value={plan} onChange={(e) => setPlan(e.target.value)} />
                   {saveBar(() => void save(() => updateGoal(goal.id, { plan })))}
                 </>
               ) : goal.plan ? (
@@ -138,7 +138,7 @@ export function MemorySheet({ goal, athlete, onChanged, onTell, onUploadPlan, on
                       className="inline-flex items-center gap-1.5 rounded border border-border bg-secondary px-2 py-1 text-xs">
                       <FileText className="size-3 text-accent" />
                       <span className="max-w-[140px] truncate">{f.name}</span>
-                      <span className="font-mono text-[10px] text-muted-foreground">{formatFileSize(f.size)}</span>
+                      <span className="font-mono text-[0.625rem] text-muted-foreground">{formatFileSize(f.size)}</span>
                     </a>
                   ))}
                 </div>

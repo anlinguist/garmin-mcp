@@ -20,7 +20,7 @@ export const MessageBubble = memo(function MessageBubble({ message, showLabel, p
   return (
     <div className={cn('relative flex w-full min-w-0 flex-col gap-1', isUser ? 'items-end' : 'items-start')}>
       {showLabel && (
-        <span className={cn('px-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground', isUser ? 'pr-2' : 'pl-1')}>
+        <span className={cn('px-1 text-[0.6875rem] font-semibold uppercase tracking-widest text-muted-foreground', isUser ? 'pr-2' : 'pl-1')}>
           {isUser ? 'You' : 'Rabbit'}
         </span>
       )}
@@ -36,19 +36,19 @@ export const MessageBubble = memo(function MessageBubble({ message, showLabel, p
             // Dolly's MessageFileCard
             <a key={a.id} href={attachmentUrl(a.id)} target="_blank" rel="noopener"
               className="inline-flex min-w-[140px] max-w-[220px] items-center gap-2 rounded-lg border border-border bg-background p-1.5 shadow-sm transition-colors hover:bg-secondary/50">
-              <span className="flex h-7 w-8 shrink-0 items-center justify-center rounded bg-accent font-mono text-[9px] font-bold tracking-wide text-white">
+              <span className="flex h-7 w-8 shrink-0 items-center justify-center rounded bg-accent font-mono text-[0.5625rem] font-bold tracking-wide text-white">
                 {a.kind === 'pdf' ? 'PDF' : <FileText className="size-3.5" />}
               </span>
               <span className="flex min-w-0 flex-col pr-2">
                 <span className="truncate text-xs font-medium text-foreground">{a.name}</span>
-                <span className="mt-0.5 font-mono text-[10px] leading-none text-muted-foreground">{formatFileSize(a.size)}</span>
+                <span className="mt-0.5 font-mono text-[0.625rem] leading-none text-muted-foreground">{formatFileSize(a.size)}</span>
               </span>
             </a>
           ))}
         </div>
       )}
       {message.text && <div data-msg-id={message.id} {...pressProps} className={cn(
-        'msg-press relative min-w-0 max-w-[85%] overflow-hidden break-words rounded-xl px-3.5 py-2.5 text-[14px] leading-relaxed shadow-sm',
+        'msg-press relative min-w-0 max-w-[85%] overflow-hidden break-words rounded-xl px-3.5 py-2.5 text-[1rem] leading-[1.45] shadow-sm',
         isUser
           ? 'rounded-tr-sm border border-black/10 bg-[var(--msg-user-bg)] text-[var(--msg-user-text)]'
           : message.error
@@ -58,7 +58,7 @@ export const MessageBubble = memo(function MessageBubble({ message, showLabel, p
         {isUser || message.error ? (
           <p className="m-0 whitespace-pre-wrap">{message.text}</p>
         ) : (
-          <div className="prose prose-sm max-w-none overflow-x-auto text-foreground prose-p:my-1.5 prose-p:leading-relaxed prose-pre:my-2 prose-pre:border prose-pre:border-border prose-pre:bg-secondary/50 prose-table:text-[13px] prose-headings:text-foreground prose-strong:text-foreground">
+          <div className="prose prose-sm text-[1em]! max-w-none overflow-x-auto text-foreground prose-p:my-1.5 prose-p:leading-[1.45] prose-pre:my-2 prose-pre:border prose-pre:border-border prose-pre:bg-secondary/50 prose-table:text-[0.8125rem] prose-headings:text-foreground prose-strong:text-foreground">
             <Markdown remarkPlugins={REMARK_PLUGINS}>{message.text}</Markdown>
           </div>
         )}

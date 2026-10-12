@@ -107,6 +107,8 @@ def test_tool_turn_uses_fake_garmin_data(env) -> None:
     assert kinds[:2] == ["tool-call-start", "tool-call-result"]
     result = events[1]["result"]
     assert result["count"] >= 4 and result["activities"][0]["activity_id"]
+    assert all(a["weekday"] in ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
+                                "Saturday", "Sunday") for a in result["activities"])
     tool_result = backend.calls[1][-1]["content"][0]
     assert tool_result["tool_use_id"] == "tu_recent_activities_0"
     assert '"activities"' in tool_result["content"] and "is_error" not in tool_result
@@ -290,3 +292,18 @@ def test_chat_endpoint_streams_ndjson_and_saves_history(env, tmp_path, fernet_ke
             assert (await c.post("/app/api/chat/clear", headers=hdrs, content=b"{}")).json()["ok"]
             assert (await c.get("/app/api/messages")).json()["turns"] == []
     asyncio.run(go())
+
+
+def test_budget_counts_cached_input(env) -> None:
+    class Cached(Scripted):
+        async def turn(self, **kw):
+            r = await super().turn(**kw)
+            r.usage = SimpleNamespace(input_tokens=8, output_tokens=10,
+                                      cache_read_input_tokens=5000, cache_creation_input_tokens=0)
+            return r
+    agent, _ = env.agent([])
+    agent._backend = Cached([(["a"], [], "end_turn")])
+    events, emit = collect()
+    run(agent.run("friend", "x", emit))
+    usage = next(e for e in events if e["type"] == "usage")
+    assert usage["promptTokens"] == 5008 and usage["totalTokens"] == 5018

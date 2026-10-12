@@ -132,6 +132,19 @@ class _TurnState:
             self.parts.append({"type": "text", "text": t})
 
 
+def _with_weekdays(out: dict[str, Any]) -> dict[str, Any]:
+    """Add the weekday to each activity: models misjudge weekdays from bare dates.
+    Agent-only; the MCP tool's output is unchanged."""
+    for a in out.get("activities", []):
+        d = a.get("date")
+        if isinstance(d, str) and len(d) >= 10:
+            try:
+                a["weekday"] = datetime.fromisoformat(d[:10]).strftime("%A")
+            except ValueError:
+                pass
+    return out
+
+
 def _clip(obj: Any, limit: int) -> Any:
     s = json.dumps(obj, separators=(",", ":"), default=str)
     if len(s) <= limit:
@@ -207,9 +220,10 @@ class Agent:
         if name == "recent_activities":
             days = args.get("days", 7)
             sport = args.get("sport")
-            return self._service.recent_activities(
+            out = self._service.recent_activities(
                 user_id, int(days) if isinstance(days, int | float) else 7,
                 sport if isinstance(sport, str) and sport.strip() else None)
+            return _with_weekdays(out)
         if name == "search":
             query = args.get("query")
             limit = args.get("limit", 8)
@@ -286,9 +300,12 @@ class Agent:
                 return finish("error", "I couldn't reach the coach model just now. "
                                        "Please try again in a minute.")
             usage = getattr(resp, "usage", None)
-            st.tokens_in += int(getattr(usage, "input_tokens", 0) or 0)
+            cache_read = int(getattr(usage, "cache_read_input_tokens", 0) or 0)
+            cache_write = int(getattr(usage, "cache_creation_input_tokens", 0) or 0)
+            # Budget counts every input token the request processed, cached or not.
+            st.tokens_in += int(getattr(usage, "input_tokens", 0) or 0) + cache_read + cache_write
             st.tokens_out += int(getattr(usage, "output_tokens", 0) or 0)
-            st.cache_read += int(getattr(usage, "cache_read_input_tokens", 0) or 0)
+            st.cache_read += cache_read
             messages.append({"role": "assistant", "content": resp.content})
 
             if resp.stop_reason == "refusal":

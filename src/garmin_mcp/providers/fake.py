@@ -192,6 +192,8 @@ def fake_answer(fn_name: str, kwargs: dict[str, Any], today: date | None = None)
         return _hrv(_day(kwargs["cdate"]))
     if fn_name == "get_training_readiness":
         return _readiness(_day(kwargs["cdate"]))
+    if fn_name == "get_morning_training_readiness":
+        return _readiness(_day(kwargs["cdate"]))[0]
     if fn_name in ("get_user_summary", "get_stats"):
         return _summary(_day(kwargs["cdate"]))
     if fn_name == "get_rhr_day":
@@ -203,7 +205,7 @@ def fake_answer(fn_name: str, kwargs: dict[str, Any], today: date | None = None)
         days = [(lo + timedelta(days=i)) for i in range((hi - lo).days + 1)][:31]
         return [{"date": d.isoformat(), "charged": round(_rng("bb", d).uniform(40, 80)),
                  "drained": round(_rng("bbd", d).uniform(40, 85))} for d in days]
-    if fn_name == "get_training_status":
+    if fn_name in ("get_training_status", "get_daily_training_status"):
         d = _day(kwargs["cdate"])
         return {"calendarDate": d.isoformat(), "trainingStatus": "PRODUCTIVE",
                 "acuteTrainingLoad": 512, "chronicTrainingLoad": 468, "loadRatio": 1.09,

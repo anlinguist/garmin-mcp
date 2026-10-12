@@ -42,6 +42,12 @@ export function MessageMenu({ target, onClose, onDiscuss, onToast }: {
     return () => el.classList.remove('msg-lifted')
   }, [target.el, selecting])
 
+  // Page-wide selection lock (set by useLongPress when the menu fires): release it when
+  // the menu closes. The Select-text sheet opts back in via .selectable.
+  useEffect(() => () => {
+    window.setTimeout(() => document.documentElement.classList.remove('msg-menu-open'), 50)
+  }, [])
+
   useLayoutEffect(() => {
     const r = target.el.getBoundingClientRect()
     const h = menu.current?.offsetHeight ?? 180

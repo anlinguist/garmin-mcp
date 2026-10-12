@@ -86,9 +86,11 @@ html, body { overscroll-behavior: none; }
 .selectable { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
 .msg-press { transition: transform 0.15s ease; }
 .msg-press:active { transform: scale(0.985); }
-/* Once the menu is open, the bubble can't be (re)selected: iOS would otherwise show its
-   Copy bar when the finger lifts. */
-.msg-lifted, .msg-lifted * { -webkit-user-select: none !important; user-select: none !important; }
+/* While the menu is open nothing on the page is selectable: when the finger lifts, iOS
+   tries to finish its selection gesture and would otherwise land on the nearest
+   selectable text (drawing handles / the Copy bar). The Select-text sheet opts back in. */
+html.msg-menu-open, html.msg-menu-open * { -webkit-user-select: none !important; user-select: none !important; }
+html.msg-menu-open .selectable, html.msg-menu-open .selectable * { -webkit-user-select: text !important; user-select: text !important; }
 .msg-lifted {
   position: relative; z-index: 60;
   animation: msg-lift 0.32s cubic-bezier(0.2, 0.9, 0.25, 1.15) forwards;

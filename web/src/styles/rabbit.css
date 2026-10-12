@@ -4,8 +4,16 @@ html, body, #root { height: 100%; }
 html { -webkit-tap-highlight-color: transparent; }
 body { overscroll-behavior: none; }
 
+/* The page itself never scrolls; only the chat feed does. The shell is a fixed frame that
+   tracks the *visual* viewport (lib/viewport.ts sets --vv-h / --vv-top): when the iOS
+   keyboard opens, iOS shifts the visual viewport instead of resizing the page, and the
+   frame follows it, so the header stays put and the composer sits on the keyboard. */
+html, body { overflow: hidden; }
 .app-shell {
-  min-height: 100dvh;
+  position: fixed;
+  left: 0; right: 0; top: 0;
+  height: var(--vv-h, 100dvh);
+  transform: translateY(var(--vv-top, 0px));
   display: flex;
   flex-direction: column;
   /* Top/bottom safe areas are handled by each screen (the chat header and

@@ -168,6 +168,18 @@ html.msg-menu-open .selectable, html.msg-menu-open .selectable * { -webkit-user-
 html.kb-open .composer-bar { padding-bottom: 4px; }
 /* Typing: give the feed the room; the pinned plan cards come back when the keyboard closes. */
 html.kb-open .coach-pins { display: none; }
-/* The expanded week dims everything under it (feed and composer); tap to close. */
+/* The expanded week: a drawer that slides down over the feed while everything else dims. */
 .week-dim { position: fixed; inset: 0; z-index: 45; background: rgba(0, 0, 0, 0.45);
-  animation: modal-fade-in 0.18s ease-out both; }
+  opacity: 0; pointer-events: none; transition: opacity 0.22s ease; }
+.week-dim--open { opacity: 1; pointer-events: auto; }
+.week-drawer {
+  position: absolute; left: 0; right: 0; top: 100%;
+  display: grid; grid-template-rows: 0fr;
+  border: 1px solid var(--border); border-top: none; border-radius: 0 0 0.75rem 0.75rem;
+  background: var(--bg-surface); box-shadow: var(--shadow-lg);
+  opacity: 0; visibility: hidden;
+  transition: grid-template-rows 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s ease, visibility 0s linear 0.28s;
+}
+.week-drawer--open { grid-template-rows: 1fr; opacity: 1; visibility: visible;
+  transition: grid-template-rows 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.15s ease, visibility 0s; }
+@media (prefers-reduced-motion: reduce) { .week-drawer, .week-dim { transition: none; } }

@@ -147,9 +147,12 @@ export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay }: {
 
   return (
     <>
-    {open && <div className="week-dim" onClick={() => setOpen(false)} aria-hidden />}
-    <div className={cn('coach-pins relative shrink-0 border-b border-(--border) bg-(--bg) px-3 py-2', open && 'z-[46]')}>
-      <div className="mx-auto max-w-2xl overflow-hidden rounded-xl border border-border bg-(--bg-surface) shadow-sm">
+    <div className={cn('week-dim', open && 'week-dim--open')} onClick={() => setOpen(false)} aria-hidden />
+    <div className="coach-pins shrink-0 border-b border-(--border) bg-(--bg) px-3 py-2">
+      {/* Only the card rises above the dimming; the drawer slides down over the feed. */}
+      <div className={cn('relative mx-auto max-w-2xl', open && 'z-[46]')}>
+      <div className={cn('overflow-hidden border border-border bg-(--bg-surface) shadow-sm transition-[border-radius] duration-200',
+        open ? 'rounded-t-xl' : 'rounded-xl')}>
         <button onClick={() => setOpen((v) => !v)} aria-expanded={open}
           className="flex w-full items-center gap-2 px-3 pb-2 pt-2 text-left">
           <span className="min-w-0 flex-1">
@@ -178,8 +181,10 @@ export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay }: {
           </span>
           <ChevronDown className={cn('size-4 shrink-0 self-center text-muted-foreground transition-transform', open && 'rotate-180')} />
         </button>
-        {open && (
-          <div className="max-h-[48vh] overflow-y-auto overscroll-contain border-t border-border px-1 py-1">
+      </div>
+        <div className={cn('week-drawer', open && 'week-drawer--open')} aria-hidden={!open} inert={!open}>
+          <div className="min-h-0 overflow-hidden">
+          <div className="max-h-[52vh] overflow-y-auto overscroll-contain px-1 py-1">
             <div className="flex items-center gap-2 px-2 py-1.5">
               <span className="min-w-0 flex-1 text-[0.7059rem] leading-snug text-muted-foreground">
                 {hasPlan ? (week?.focus || goal.title) : 'No plan yet. Upload it or tell Rabbit about it.'}
@@ -198,7 +203,8 @@ export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay }: {
             {week?.days.map((d) => <DayRow key={d.date} day={d} onAsk={(day) => { setOpen(false); onAskDay(day) }} />)}
             {week && <p className="px-2 pb-1 pt-0.5 text-[0.5882rem] text-muted-foreground">Tap a day to ask Rabbit about it.</p>}
           </div>
-        )}
+          </div>
+        </div>
       </div>
     </div>
     </>

@@ -18,13 +18,13 @@ function formatRelativeTime(ts: number): string {
   return new Date(ts * 1000).toLocaleDateString()
 }
 
-export function ThreadsSheet({ goal, threads, activeId, onSelect, onNew, onDelete, onEditGoal, onClose, closing }: {
+export function ThreadsSheet({ goal, threads, activeId, onSelect, onNew, onDelete, onEditGoal, onClose, onDismissed, closing }: {
   goal: Goal | null; threads: Thread[]; activeId: string | null
   onSelect: (id: string) => void; onNew: () => void; onDelete: (id: string) => void
-  onEditGoal: () => void; onClose: () => void; closing: boolean
+  onEditGoal: () => void; onClose: () => void; onDismissed: () => void; closing: boolean
 }) {
   const [deleteTarget, setDeleteTarget] = useState<Thread | null>(null)
-  const drag = useSheetDrag(onClose)
+  const drag = useSheetDrag(onDismissed)
   return (
     <div className={`modal-overlay ${closing ? 'modal-overlay--exit' : ''}`} onClick={onClose}>
       <div className={`modal ${closing ? 'modal--exit' : ''}`} onClick={(e) => e.stopPropagation()} {...drag}>

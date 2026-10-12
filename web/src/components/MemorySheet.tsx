@@ -46,12 +46,12 @@ const ATHLETE_LABELS: [keyof Athlete, string][] = [
   ['injuries', 'Injuries or limits'], ['preferences', 'Preferences'], ['units', 'Units'], ['age', 'Age'],
 ]
 
-export function MemorySheet({ goal, athlete, onChanged, onTell, onUploadPlan, onClose, closing }: {
+export function MemorySheet({ goal, athlete, onChanged, onTell, onUploadPlan, onClose, onDismissed, closing }: {
   goal: Goal | null; athlete: Athlete
   onChanged: () => void
   onTell: (draft: string) => void
   onUploadPlan: () => void
-  onClose: () => void; closing: boolean
+  onClose: () => void; onDismissed: () => void; closing: boolean
 }) {
   const [editing, setEditing] = useState<'goal' | 'plan' | 'about' | 'notes' | null>(null)
   const [g, setG] = useState({ title: goal?.title ?? '', date: goal?.date ?? '', target: goal?.target ?? '', priorities: goal?.priorities ?? '' })
@@ -61,7 +61,7 @@ export function MemorySheet({ goal, athlete, onChanged, onTell, onUploadPlan, on
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const [showFullPlan, setShowFullPlan] = useState(false)
-  const drag = useSheetDrag(onClose)
+  const drag = useSheetDrag(onDismissed)
 
   async function save(fn: () => Promise<unknown>) {
     setBusy(true); setMsg(null)

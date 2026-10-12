@@ -126,7 +126,9 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
     if (sheet) { setSheet(null); setClosing(false) }
   }
   const close = () => { setClosing(true); setTimeout(() => { setSheet(null); setClosing(false) }, 200) }
-  const settingsDrag = useSheetDrag(close)
+  // Drag-dismiss animates itself out, then unmounts at once (no second exit animation).
+  const dismissNow = useCallback(() => { setSheet(null); setClosing(false) }, [])
+  const settingsDrag = useSheetDrag(dismissNow)
 
   async function newThread(from?: { thread_id: string; turn_id: string }) {
     setBusy(true)
@@ -284,7 +286,7 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
       />
 
       {sheet === 'threads' && (
-        <ThreadsSheet goal={goal} threads={threads} activeId={threadId} closing={closing}
+        <ThreadsSheet goal={goal} threads={threads} activeId={threadId} closing={closing} onDismissed={dismissNow}
           onSelect={(id) => { setThreadId(id); close() }}
           onNew={() => void newThread()}
           onDelete={async (id) => {
@@ -293,7 +295,7 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
           onEditGoal={() => open('memory')} onClose={close} />
       )}
       {sheet === 'memory' && (
-        <MemorySheet goal={goal} athlete={me.athlete} closing={closing} onClose={close}
+        <MemorySheet goal={goal} athlete={me.athlete} closing={closing} onClose={close} onDismissed={dismissNow}
           onChanged={() => { onChange(); void refreshThreads() }}
           onTell={tellRabbit}
           onUploadPlan={() => tellRabbit("Here's my updated training plan.")} />

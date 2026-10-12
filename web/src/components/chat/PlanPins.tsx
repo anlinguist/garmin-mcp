@@ -2,7 +2,7 @@
 // which expands into planned vs. done by day. Weeks follow the plan's own weeks.
 import { useEffect, useRef, useState } from 'react'
 import {
-  Activity, Bike, Check, MessageCircle, ChevronRight, Dumbbell, Footprints, Layers, Map as MapIcon, Moon, Waves,
+  Activity, Bike, Check, MessageCircle, ChevronRight, Dumbbell, Footprints, Layers, Moon, Waves,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Goal, PlannedSession, PlanWeek, Sport, WeekDay } from '@/lib/api'
@@ -97,13 +97,13 @@ function DayRow({ day, openKey, onToggle, onAsk }: {
   const date = new Date(`${day.date}T12:00:00`)
   const list = items(day)
   return (
-    <div className={cn('flex gap-3 rounded-lg px-2 py-1.5', day.today && 'bg-(--accent-subtle)')}>
-      <span className="w-9 shrink-0 pt-1.5 text-center leading-tight">
+    <div className={cn('flex gap-3 px-2 py-1.5', day.today && 'bg-(--accent-subtle)')}>
+      <span className="w-9 shrink-0 pt-1 text-center leading-tight">
         <span className={cn('block text-[0.6471rem] font-semibold uppercase', day.today ? 'text-(--accent)' : 'text-muted-foreground')}>{day.weekday}</span>
         <span className="block text-[0.7647rem] text-foreground/80">{date.getDate()}</span>
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
-        {!list.length && <span className="py-1.5 text-[0.7647rem] text-muted-foreground">Nothing planned</span>}
+        {!list.length && <span className="py-1 text-[0.7647rem] text-muted-foreground">Nothing planned</span>}
         {list.map((it) => {
           const Icon = SPORT_ICON[it.sport]
           const id = `${day.date}:${it.key}`
@@ -114,7 +114,7 @@ function DayRow({ day, openKey, onToggle, onAsk }: {
             <span key={it.key} className="flex flex-col">
               <button type="button" disabled={!canOpen} aria-expanded={canOpen ? expanded : undefined}
                 onClick={() => onToggle(expanded ? null : id)}
-                className="flex w-full items-center gap-2 py-1.5 text-left disabled:cursor-default">
+                className="flex w-full items-center gap-2 py-1 text-left disabled:cursor-default">
                 <Icon className={cn('size-3.5 shrink-0', it.status === 'done' || it.status === 'extra' ? 'text-(--accent)' : 'text-muted-foreground')} />
                 <span className={cn('min-w-0 flex-1 truncate text-[0.7647rem]', it.status === 'rest' ? 'text-muted-foreground' : 'text-foreground')}>
                   {it.title}{dur && <span className="text-muted-foreground"> · {dur}</span>}
@@ -220,26 +220,24 @@ export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay }: {
       </div>
         <div className={cn('week-drawer', open && 'week-drawer--open')} aria-hidden={!open} inert={!open}>
           <div className="min-h-0 overflow-hidden">
-          <div className="max-h-[52vh] overflow-y-auto overscroll-contain px-1 py-1">
-            <div className="flex items-center gap-2 px-2 py-1.5">
-              <span className="min-w-0 flex-1 leading-snug">
-                <span className="block truncate text-[0.7059rem] text-foreground/85">
-                  {hasPlan ? (week?.focus?.replace(/\s*\([^)]*\)\s*$/, '') || goal.title) : 'No plan yet'}
-                </span>
-                {t && (t.planned_minutes > 0 || t.done_minutes > 0) && (
-                  <span className="block text-[0.6471rem] text-muted-foreground">{fmtMinutes(t.done_minutes)} of ~{fmtMinutes(t.planned_minutes)}</span>
-                )}
+          <div className="max-h-[52vh] overflow-y-auto overscroll-contain pb-1">
+            <div className="flex items-center gap-2 px-3 pb-1 pt-1.5">
+              <span className="min-w-0 flex-1 truncate text-[0.6471rem] text-muted-foreground">
+                {!hasPlan ? 'No plan yet'
+                  : t && t.planned_minutes > 0 ? `${fmtMinutes(t.done_minutes)} of ~${fmtMinutes(t.planned_minutes)} this week` : ''}
               </span>
               <button onClick={() => { setOpen(false); onOpenPlan() }}
-                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border px-2.5 py-1 text-[0.6471rem] text-foreground hover:bg-secondary">
-                <MapIcon className="size-3.5 text-(--accent)" /> {hasPlan ? 'Open plan' : 'Add plan'} <ChevronRight className="size-3" />
+                className="inline-flex shrink-0 items-center gap-0.5 text-[0.6471rem] font-medium text-(--accent) active:opacity-70">
+                {hasPlan ? 'Open plan' : 'Add plan'} <ChevronRight className="size-3.5" />
               </button>
             </div>
             {week?.garmin_error && <p className="px-2 py-1 text-[0.6471rem] text-(--warning)">{week.garmin_error}</p>}
             {week?.plan_status === 'error' && <p className="px-2 py-1 text-[0.6471rem] text-muted-foreground">Couldn't read this week from your plan. Showing what you've done.</p>}
             {week?.plan_status === 'over_budget' && <p className="px-2 py-1 text-[0.6471rem] text-muted-foreground">Planned sessions show up tomorrow (today's limit is used up).</p>}
-            {week?.days.map((d) => <DayRow key={d.date} day={d} openKey={openKey} onToggle={setOpenKey}
-              onAsk={(day, session) => { setOpen(false); onAskDay(day, session) }} />)}
+            <div className="divide-y divide-(--border)">
+              {week?.days.map((d) => <DayRow key={d.date} day={d} openKey={openKey} onToggle={setOpenKey}
+                onAsk={(day, session) => { setOpen(false); onAskDay(day, session) }} />)}
+            </div>
           </div>
           </div>
         </div>

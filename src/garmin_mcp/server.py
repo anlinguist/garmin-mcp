@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
+from collections.abc import AsyncIterator
 from typing import Any
 
+import anyio
 import uvicorn
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions, RevocationOptions
@@ -13,19 +16,26 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
+from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+from starlette.routing import Route
 
+from .appstore import AppStore
 from .auth import SCOPE, GitHubOAuthProvider
 from .config import Settings
 from .logs import log_event, setup_logging
 from .providers import GarminError
+from .poller import Poller, PollerThread, RoutineClient, Schedule, StateStore, token_fingerprint
 from .providers.unofficial import UnofficialProvider
 from .registry import Registry
 from .resilience import RateLimiter, TTLCache
 from .secrets import get_secret
 from .tokens import EncryptedFileTokenStore
 from .tools import GarminService
+from .webapp import build_app_routes
+from .webauth import WebAuth
+from .webpush import WebPush
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +58,8 @@ def _dev_user(settings: Settings) -> str | None:
 
 
 def build_app(settings: Settings, service: GarminService,
-              auth_provider: GitHubOAuthProvider | None, dev_user: str | None = None) -> Any:
+              auth_provider: GitHubOAuthProvider | None, dev_user: str | None = None,
+              extra_routes: list[Any] | None = None) -> Any:
     auth = None
     if auth_provider is not None:
         auth = AuthSettings(
@@ -134,7 +145,7 @@ def build_app(settings: Settings, service: GarminService,
     if local:
         hosts += ["localhost:*", "127.0.0.1:*"]
         origins += ["http://localhost:*", "http://127.0.0.1:*"]
-    return mcp.streamable_http_app(
+    app = mcp.streamable_http_app(
         streamable_http_path="/mcp",
         stateless_http=True,
         json_response=True,
@@ -145,6 +156,82 @@ def build_app(settings: Settings, service: GarminService,
             allowed_origins=origins,
         ),
     )
+    if extra_routes:
+        app.router.routes.extend(extra_routes)
+    return app
+
+
+def build_web_routes(settings: Settings, fernet_key: str, token_store: EncryptedFileTokenStore,
+                     dev_user: str | None) -> list[Any]:
+    """Rabbit web app routes (/app); empty unless APP_ENABLED."""
+    if not settings.app_enabled:
+        return []
+    store = AppStore(settings.app_dir, fernet_key)
+    if dev_user is None:
+        if not settings.google_client_id or not settings.allowed_google_users:
+            raise RuntimeError("APP_ENABLED needs GOOGLE_CLIENT_ID and ALLOWED_GOOGLE_USERS")
+        google_secret = get_secret(settings.google_client_secret_name, "GOOGLE_CLIENT_SECRET",
+                                   settings.gcp_project)
+    else:
+        google_secret = ""
+    auth = WebAuth(settings, store, google_secret, dev_user=dev_user)
+    push = None
+    if settings.vapid_subject:
+        try:
+            vapid_key = get_secret(settings.vapid_private_key_secret_name, "VAPID_PRIVATE_KEY",
+                                   settings.gcp_project)
+            push = WebPush(store, vapid_key, settings.vapid_subject)
+        except Exception as e:  # push is optional; the app works without it
+            log_event(logger, logging.ERROR, "push_disabled", error=type(e).__name__)
+    log_event(logger, logging.INFO, "app_enabled", push=push is not None,
+              allowed_users=len(settings.allowed_google_users))
+    return build_app_routes(settings, auth, token_store, push)
+
+
+def build_poller(settings: Settings, service: GarminService,
+                 token_store: EncryptedFileTokenStore) -> PollerThread | None:
+    """Background workout-sync poller; None unless POLL_USER_ID is set."""
+    user = settings.poll_user_id
+    if not user:
+        return None
+    routine = None
+    if not settings.poll_dry_run:
+        if not settings.routine_id:
+            raise RuntimeError("ROUTINE_ID is required when POLL_USER_ID is set")
+        token = get_secret(settings.routine_token_secret_name, "ROUTINE_TOKEN",
+                           settings.gcp_project)
+        routine = RoutineClient(settings.routine_id, token)
+    state_dir = settings.poll_state_path.parent
+    state_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+
+    def fetch_page(start: int, limit: int) -> list[dict[str, Any]]:
+        return service.read_uncached(user, "get_activities", {"start": start, "limit": limit})
+
+    poller = Poller(
+        fetch_page, StateStore(settings.poll_state_path), routine,
+        dry_run=settings.poll_dry_run,
+        max_fires_per_day=settings.poll_max_fires_per_day,
+        token_fingerprint=token_fingerprint(lambda: token_store.load(user)),
+    )
+    schedule = Schedule.parse(settings.poll_timezone, settings.poll_fast_hours,
+                              settings.poll_fast_minutes)
+    return PollerThread(poller, schedule, state_dir / "poller.lock")
+
+
+def _attach_poller(app: Any, thread: PollerThread) -> None:
+    """Run the poller for the app's lifetime, inside the MCP session manager's lifespan."""
+    inner = app.router.lifespan_context
+
+    @contextlib.asynccontextmanager
+    async def lifespan(a: Any) -> AsyncIterator[Any]:
+        async with inner(a) as state:
+            thread.start()
+            try:
+                yield state
+            finally:
+                await anyio.to_thread.run_sync(thread.stop)
+
+    app.router.lifespan_context = lifespan
 
 
 def create_app() -> tuple[Settings, Any]:
@@ -165,6 +252,16 @@ def create_app() -> tuple[Settings, Any]:
         max_response_bytes=settings.max_response_bytes,
     )
     dev_user = _dev_user(settings)
+    if not settings.mcp_enabled:
+        # Rabbit-only process (its own service, port, data dir and user): no /mcp
+        # endpoint at all, and config errors are fatal here since nothing else
+        # depends on this process.
+        web_routes = build_web_routes(settings, fernet_key, token_store, dev_user)
+        if not web_routes:
+            raise RuntimeError("MCP_ENABLED=false needs APP_ENABLED=true")
+        log_event(logger, logging.INFO, "startup", base_url=settings.public_base_url,
+                  mode="app_only")
+        return settings, build_web_only_app(web_routes)
     auth_provider = None
     if dev_user is None:
         if not settings.github_client_id or not settings.allowed_github_users:
@@ -178,10 +275,34 @@ def create_app() -> tuple[Settings, Any]:
     counts: dict[str, int] = {}
     for m in registry.all():
         counts[m.access.value] = counts.get(m.access.value, 0) + 1
+    try:
+        poller = build_poller(settings, service, token_store)
+    except Exception as e:  # a broken poller config must not take the MCP server down
+        log_event(logger, logging.ERROR, "poller_disabled", error=type(e).__name__,
+                  detail=str(e)[:200] if isinstance(e, RuntimeError) else None)
+        poller = None
     log_event(logger, logging.INFO, "startup", base_url=settings.public_base_url,
               allow_writes=settings.allow_writes, methods=counts,
-              allowed_users=len(settings.allowed_github_users))
-    return settings, build_app(settings, service, auth_provider, dev_user)
+              allowed_users=len(settings.allowed_github_users),
+              poller=("off" if poller is None else
+                      "dry_run" if settings.poll_dry_run else "on"))
+    try:
+        web_routes = build_web_routes(settings, fernet_key, token_store, dev_user)
+    except Exception as e:  # a broken web-app config must not take the MCP server down
+        log_event(logger, logging.ERROR, "app_disabled", error=type(e).__name__,
+                  detail=str(e)[:200] if isinstance(e, RuntimeError) else None)
+        web_routes = []
+    app = build_app(settings, service, auth_provider, dev_user, web_routes)
+    if poller is not None:
+        _attach_poller(app, poller)
+    return settings, app
+
+
+def build_web_only_app(web_routes: list[Any]) -> Any:
+    """Starlette app with just /healthz and the Rabbit routes (no MCP, no OAuth AS)."""
+    async def healthz(request: Request) -> Response:
+        return JSONResponse({"ok": True})
+    return Starlette(routes=[Route("/healthz", healthz, methods=["GET"]), *web_routes])
 
 
 def main() -> None:

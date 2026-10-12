@@ -29,9 +29,16 @@ src/garmin_mcp/
   shaping.py           bulky-field removal + size cap
   resilience.py        TTL cache + per-user rate limiter
   tools.py             search / execute / recent_activities (transport-independent)
+  poller.py            workout-sync poller: new activities -> Claude Code routine
   auth.py              MCP OAuth authorization server backed by GitHub
+  webauth.py           Rabbit web app: Google sign-in + cookie sessions
+  webpush.py           Rabbit web app: Web Push (VAPID + aes128gcm), SSRF-guarded
+  webapp.py            Rabbit web app: /app routes and static frontend
+  appstore.py          small Fernet-encrypted JSON docs (sessions, per-user data)
   server.py            MCPServer app, uvicorn on 127.0.0.1
   login_cli.py         garmin-mcp-login
+web/                   Rabbit frontend (Vite + React, ported from Dolly); builds into src/garmin_mcp/web_dist
+brand/                 Rabbit logo (SVG)
 infra/                 setup.sh, bootstrap-vm.sh, systemd unit, Caddyfile
 deploy.sh              push + restart over IAP
 scripts/smoke_live.py  live check against your real account (not CI)
@@ -173,6 +180,107 @@ Access tokens last 1 hour and refresh tokens last 30 days, rotated on every use.
 2. `sudo garmin-mcp-login --user <user_id>` with their Garmin credentials, over SSH, with them present for MFA.
 
 Each user's tokens, cache entries and rate-limit bucket are keyed by `user_id`.
+
+## Workout-sync poller (optional)
+
+A background thread in the server checks Garmin for new activities and fires a
+[Claude Code routine](https://claude.ai/code/routines) through its API trigger, once per batch,
+with one line per activity (`id | sport | start time local | duration | distance`). It runs every 5 min
+from 5 to 9:55am and hourly otherwise, in `America/Denver` (`POLL_*` in `.env.example`).
+Each poll logs one `poll` line with `checked`, `new` and `triggered`.
+
+- **First run** only records the newest activity ID; it doesn't fire.
+- **At most once per activity.** The last-seen ID advances only after the routine returns 200, so
+  failures retry on the next poll. If the outcome is unknown (a timeout after sending, or a crash
+  mid-fire), it advances anyway and logs `routine_fire_outcome_unknown`, because `/fire` has no
+  idempotency key and retrying could start a duplicate review.
+- **Self-healing.** Errors never stop the loop. Garmin or routine failures back off from 5 min
+  up to 1 h, a routine 429 waits for `Retry-After`, and a Garmin re-auth error pauses polling until
+  `garmin-mcp-login` writes new tokens. A file lock allows one poller per data dir, and
+  `POLL_MAX_FIRES_PER_DAY` caps fires as a circuit breaker.
+- **Multisport:** child activities (with a `parentId`) are skipped and the parent is reported.
+
+State: `/var/lib/garmin-mcp/poller/state.json`. Delete it to re-baseline.
+
+To enable it:
+1. Create the routine at claude.ai/code/routines, add an API trigger, and copy its ID and token.
+2. Store the token, piped straight from the prompt into Secret Manager:
+   ```bash
+   gcloud secrets create garmin-mcp-routine-token --project <PROJECT> --replication-policy=automatic
+   read -rs T; printf '%s' "$T" | gcloud secrets versions add garmin-mcp-routine-token --project <PROJECT> --data-file=-
+   gcloud secrets add-iam-policy-binding garmin-mcp-routine-token --project <PROJECT> \
+     --member=serviceAccount:garmin-mcp-vm@<PROJECT>.iam.gserviceaccount.com \
+     --role=roles/secretmanager.secretAccessor --condition=None
+   ```
+3. Add `POLL_USER_ID=andrew`, `ROUTINE_ID=<id>`, `ROUTINE_TOKEN_SECRET_NAME=garmin-mcp-routine-token`
+   and `POLL_DRY_RUN=true` to `/etc/garmin-mcp/env`, run `sudo systemctl restart garmin-mcp`, and watch
+   `journalctl -u garmin-mcp -f | grep poll`. A dry run logs the text it would send and saves nothing.
+4. When the output looks right, set `POLL_DRY_RUN=false` and restart.
+
+## Rabbit web app (optional)
+
+Rabbit is a phone-friendly coach app at `$PUBLIC_BASE_URL/app/` for people who won't set up an MCP
+connector: Google sign-in, Web Push, and (in later phases) a chat agent and Garmin connect page. The
+plan is in `docs/plans/web-app.md`.
+
+**It runs as a separate service** so testing it can never take down the MCP connector:
+`rabbit.service` on 127.0.0.1:8001, its own system user (`rabbit`), data dir (`/var/lib/rabbit`),
+release dir (`/opt/rabbit`), env file (`/etc/rabbit/env`) and Fernet key. Caddy sends `/app` and
+`/app/*` to it and everything else to the MCP server; if Rabbit is down, only `/app` returns 502.
+The same codebase runs in both, with `MCP_ENABLED=false` in Rabbit's env (no `/mcp`, no GitHub
+OAuth). Garmin tokens for Rabbit users live only in Rabbit's data dir, so each user's tokens are
+still refreshed by exactly one process.
+
+### Rabbit local dev
+
+`scripts/dev-rabbit.sh` runs Rabbit on its own (`MCP_ENABLED=false`, port 8001), never touching
+the MCP server. Local keys, sessions and push subscriptions live in `./data/rabbit-dev`.
+
+- **Mac:** `scripts/dev-rabbit.sh mac`, then open http://localhost:5173/app/ (Vite hot reload).
+  Google is skipped (`DEV_NO_AUTH_USER=andrew`, localhost only). Chrome allows notifications on
+  localhost, so push works on the Mac too.
+- **Phone:** iOS only allows service workers, Web Push and secure cookies over real HTTPS, and
+  Google rejects LAN IPs and `.local` redirect URIs. So phone mode exposes the Mac through a
+  Cloudflare Tunnel on a fixed subdomain, with real Google sign-in (the dev bypass is refused for
+  non-localhost URLs). One-time setup:
+  ```bash
+  brew install cloudflared
+  cloudflared tunnel login                       # browser: pick the anlinguist.com zone
+  cloudflared tunnel create rabbit-dev
+  cloudflared tunnel route dns rabbit-dev rabbit-dev.anlinguist.com
+  ```
+  Add `https://rabbit-dev.anlinguist.com/app/auth/google/callback` as a redirect URI on the Google
+  OAuth client, then create `data/rabbit-dev/phone.env` (mode 600):
+  ```bash
+  RABBIT_DEV_URL=https://rabbit-dev.anlinguist.com
+  CLOUDFLARE_TUNNEL=rabbit-dev
+  GOOGLE_CLIENT_ID=...apps.googleusercontent.com
+  GOOGLE_CLIENT_SECRET=...
+  ALLOWED_GOOGLE_USERS=you@gmail.com:andrew
+  ```
+  Run `scripts/dev-rabbit.sh phone`. The frontend rebuilds on save; refresh the phone.
+
+On the VM:
+1. `./infra/setup.sh` creates `garmin-mcp-google-client-secret` (empty), `garmin-mcp-vapid-private-key`
+   and `garmin-mcp-rabbit-fernet-key` (generated) and grants the VM access.
+2. Google Cloud console → **APIs & Services → OAuth consent screen**: External, scopes `openid` and
+   `email` only, then **Publish app** (no verification needed for these scopes). **Credentials →
+   Create OAuth client ID → Web application**, authorized redirect URI
+   `https://<domain>/app/auth/google/callback`. Store the secret:
+   ```bash
+   read -rs S; printf '%s' "$S" | gcloud secrets versions add garmin-mcp-google-client-secret --project <PROJECT> --data-file=-
+   ```
+3. `./deploy.sh --rabbit --bootstrap`: creates the user, dirs, `/etc/rabbit/env` (from
+   `infra/rabbit.env.example`) and the unit, and re-renders the Caddyfile (validated first; a
+   graceful reload that doesn't restart the MCP server). The first start fails until step 4.
+4. On the VM, fill in `GOOGLE_CLIENT_ID`, `ALLOWED_GOOGLE_USERS` and `VAPID_SUBJECT` in
+   `/etc/rabbit/env`, then `sudo systemctl restart rabbit`.
+5. Later updates: `./deploy.sh --rabbit` (builds `web/` locally with bun; restarts only Rabbit).
+   `./deploy.sh --rabbit --rollback` rolls back only Rabbit. Logs: `journalctl -u rabbit -f`.
+
+On an iPhone: open the URL in Safari → Share → **Add to Home Screen**, open Rabbit from the Home
+Screen, sign in, tap **Turn on notifications**, then **Send test**, and run the streaming check.
+Removing someone from `ALLOWED_GOOGLE_USERS` (and restarting) revokes their sessions immediately.
 
 ## Switching to Garmin's official API later
 

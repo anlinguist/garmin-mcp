@@ -10,6 +10,10 @@ SA_NAME=garmin-mcp-vm
 SA="${SA_NAME}@${PROJECT}.iam.gserviceaccount.com"
 FERNET_SECRET=garmin-mcp-fernet-key
 GH_SECRET=garmin-mcp-github-client-secret
+ROUTINE_SECRET=garmin-mcp-routine-token
+GOOGLE_SECRET=garmin-mcp-google-client-secret
+VAPID_SECRET=garmin-mcp-vapid-private-key
+RABBIT_FERNET_SECRET=garmin-mcp-rabbit-fernet-key
 IP_NAME=garmin-mcp-ip
 WEB_TAG=garmin-mcp-web
 SSH_TAG=garmin-mcp-iap-ssh
@@ -34,8 +38,27 @@ if ! exists g secrets describe "$GH_SECRET"; then
   # Created empty; add the value once the GitHub OAuth App exists (see README).
   g secrets create "$GH_SECRET" --replication-policy=automatic
 fi
-for s in "$FERNET_SECRET" "$GH_SECRET"; do
-  # Per-secret binding: the VM can read exactly these two secrets and nothing else.
+if ! exists g secrets describe "$ROUTINE_SECRET"; then
+  # Created empty; add the Claude Code routine's API token when enabling the poller (README).
+  g secrets create "$ROUTINE_SECRET" --replication-policy=automatic
+fi
+if ! exists g secrets describe "$GOOGLE_SECRET"; then
+  # Created empty; add the Google OAuth client secret for the Rabbit web app (README).
+  g secrets create "$GOOGLE_SECRET" --replication-policy=automatic
+fi
+if ! exists g secrets describe "$VAPID_SECRET"; then
+  # Web Push (VAPID) signing key for the Rabbit web app. Generated locally, piped straight in.
+  uv run -q python -c 'from garmin_mcp.webpush import generate_vapid_key; print(generate_vapid_key(), end="")' |
+    g secrets create "$VAPID_SECRET" --replication-policy=automatic --data-file=-
+fi
+if ! exists g secrets describe "$RABBIT_FERNET_SECRET"; then
+  # The Rabbit web app's own Fernet key (separate process and data dir from the MCP server).
+  python3 -c 'import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode(),end="")' |
+    g secrets create "$RABBIT_FERNET_SECRET" --replication-policy=automatic --data-file=-
+fi
+for s in "$FERNET_SECRET" "$GH_SECRET" "$ROUTINE_SECRET" "$GOOGLE_SECRET" "$VAPID_SECRET" \
+         "$RABBIT_FERNET_SECRET"; do
+  # Per-secret binding: the VM can read exactly these secrets and nothing else.
   g secrets add-iam-policy-binding "$s" --member="serviceAccount:$SA" \
     --role=roles/secretmanager.secretAccessor --condition=None >/dev/null
 done

@@ -76,6 +76,13 @@ class GarminService:
         self.cache.set(key, value)
         return value
 
+    def read_uncached(self, user_id: str, method: str, kwargs: dict[str, Any]) -> Any:
+        """Raw read for internal callers (the poller) that need fresh data."""
+        info = self.registry.get(method)
+        if info is None or info.access is not Access.READ:
+            raise GarminError(f"{method} unavailable in this garminconnect version")
+        return self._upstream(user_id, info.fn, kwargs, read=True)
+
     def execute(self, user_id: str, method: str, args: dict[str, Any] | None,
                 full: bool = False) -> dict[str, Any]:
         try:

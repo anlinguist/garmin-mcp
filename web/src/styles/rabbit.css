@@ -1,0 +1,31 @@
+/* Rabbit-specific additions on top of Dolly's globals. */
+html, body, #root { height: 100%; }
+body { overscroll-behavior: none; }
+
+.app-shell {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
+  background: var(--bg);
+}
+
+.rabbit-logo { color: var(--brand); }
+
+/* "Thinking" state: a small hop, the counterpart to Dolly's head tilt. */
+@keyframes rabbit-hop {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  30% { transform: translateY(-14%) rotate(-6deg); }
+  55% { transform: translateY(0) rotate(0); }
+}
+.rabbit-logo.is-thinking { animation: rabbit-hop 0.9s var(--transition) infinite; transform-origin: 50% 80%; }
+@media (prefers-reduced-motion: reduce) { .rabbit-logo.is-thinking { animation: none; } }
+
+.panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 16px;
+}

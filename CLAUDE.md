@@ -20,7 +20,9 @@ export GARMIN_MCP_FERNET_KEY=$(uv run python -c 'from garmin_mcp.tokens import g
 export PUBLIC_BASE_URL=http://localhost:8000 DATA_DIR=./data
 DEV_NO_AUTH_USER=andrew uv run garmin-mcp       # then MCP Inspector -> Streamable HTTP -> http://localhost:8000/mcp
 
-./deploy.sh              # upload working tree over IAP, uv sync --frozen, switch release, restart, health check
+cd web && bun install && bun run build   # Rabbit frontend -> src/garmin_mcp/web_dist (gitignored)
+./deploy.sh --rabbit     # Rabbit web app only (separate rabbit.service; never restarts the MCP server)
+./deploy.sh              # MCP server: uploads working tree over IAP, uv sync --frozen, switch release, restart, health check
 ./deploy.sh --rollback   # previous release
 uv lock                  # only when dependencies change; deploy refuses without uv.lock
 ```
@@ -40,6 +42,8 @@ Request path: `server.py` (MCPServer tools) → `tools.GarminService` (transport
 - **Per-user isolation**: tokens, `TTLCache` entries, and `RateLimiter` buckets are all keyed by `user_id`. Writes and `ReauthRequired` clear that user's cache.
 - **Secrets** (`secrets.py`): Secret Manager in production, with env-var fallback (`GARMIN_MCP_FERNET_KEY`, `GITHUB_CLIENT_SECRET`) for local use.
 - **Config**: `config.Settings.from_env()`. Every variable is documented in `.env.example`. `PUBLIC_BASE_URL` must be a bare https origin (localhost excepted) and derives the issuer, `/mcp`, and `/github/callback` URLs.
+- **Poller** (`poller.py`, optional, on when `POLL_USER_ID` is set): a daemon thread started in the app lifespan (`server._attach_poller`) that polls `get_activities` via `GarminService.read_uncached` (bypasses the TTL cache, still rate-limited and on the shared session lock) and fires a Claude Code routine. Delivery is deliberately at-most-once: the cursor advances only on 200, but also on unknown outcomes (`pending_through` marks a fire in flight), since `/fire` has no idempotency key. Keep that invariant. It must stay in-process: Garmin rotates the refresh token, so a second process could race the server's refresh.
+- **Rabbit web app** (`webapp.py`, `webauth.py`, `webpush.py`, `appstore.py`, frontend in `web/`; off unless `APP_ENABLED`; plan in `docs/plans/web-app.md`): in production it runs as a separate process (`rabbit.service`, :8001, own user/data dir/Fernet key, `MCP_ENABLED=false` so `server.build_web_only_app` mounts no `/mcp`); Caddy routes `/app*` to it. Keep it that way so app work can't take down the connector, and never let two processes hold the same user's Garmin tokens. In one-process mode the `/app` routes are appended to the MCP Starlette app, and web-app config errors only disable `/app`. Google sign-in (state cookie + PKCE, userinfo read once, `sub` pinned to user_id on first login) issues an opaque `__Host-` session cookie whose hash is stored encrypted. Every `/app/api` call goes through `webapp._api`: Host check, user_id from the session only (never from the body or tool args), and Origin + JSON content-type on mutating calls. Web Push endpoints are allowlisted push-service hosts (SSRF guard). The app sets its own CSP on static files. The frontend is a Vite + React port of Dolly's UI (`web-mcp`); keep its tokens in `web/src/styles/globals.css`.
 - **Logging**: use `logs.log_event(logger, level, event, **fields)`, which emits JSON lines. Never log tokens, passwords, or response payloads.
 
 ## Library notes

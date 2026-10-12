@@ -8,3 +8,5 @@ data/
 *.fernet
 garmin_tokens.json
 infra/config.env
+src/garmin_mcp/web_dist/
+web/node_modules/

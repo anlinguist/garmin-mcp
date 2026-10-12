@@ -1,0 +1,53 @@
+[Unit]
+Description=Rabbit web app (Garmin coach), separate from the MCP server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=rabbit
+Group=rabbit
+EnvironmentFile=/etc/rabbit/env
+WorkingDirectory=/opt/rabbit/current
+ExecStart=/opt/rabbit/current/.venv/bin/garmin-mcp
+Restart=on-failure
+RestartSec=5
+UMask=0077
+
+# Resource limits: on the shared e2-micro, Rabbit must never starve the MCP server.
+# Measured idle RSS is ~75 MB, ~130 MB once the Anthropic SDK is loaded (Phase 3).
+# MemoryHigh throttles and reclaims first; MemoryMax kills only this service.
+MemoryHigh=300M
+MemoryMax=400M
+# If the whole VM runs short anyway, the kernel OOM killer picks Rabbit first.
+OOMScoreAdjust=500
+# MCP server keeps CPU priority (default weight 100) when both are busy.
+CPUWeight=50
+TasksMax=64
+
+# Hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/rabbit
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged
+
+[Install]
+WantedBy=multi-user.target

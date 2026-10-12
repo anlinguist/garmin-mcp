@@ -44,6 +44,24 @@ def _parse_user_map(entries: list[str]) -> dict[str, str]:
     return out
 
 
+def _parse_email_map(entries: list[str]) -> dict[str, str]:
+    """Parse ``<email>:<user_id>`` entries for the Rabbit web app.
+
+    Google's stable ``sub`` isn't known in advance, so the allowlist is by
+    verified email and the ``sub`` is pinned on first sign-in (see webauth).
+    """
+    from .tokens import validate_user_id
+
+    out: dict[str, str] = {}
+    for entry in entries:
+        email, sep, user_id = entry.rpartition(":")
+        email, user_id = email.strip().lower(), user_id.strip()
+        if not sep or "@" not in email or not user_id:
+            raise RuntimeError(f"ALLOWED_GOOGLE_USERS entry {entry!r} must be <email>:<user_id>")
+        out[email] = validate_user_id(user_id)
+    return out
+
+
 @dataclass(frozen=True)
 class Settings:
     public_base_url: str
@@ -75,6 +93,29 @@ class Settings:
     refresh_token_ttl_seconds: int = 30 * 24 * 3600
     log_level: str = "INFO"
 
+    # Workout-sync poller (off unless POLL_USER_ID is set)
+    poll_user_id: str = ""
+    routine_id: str = ""
+    routine_token_secret_name: str = ""
+    poll_dry_run: bool = False
+    poll_timezone: str = "America/Denver"
+    poll_fast_hours: str = "5-9"
+    poll_fast_minutes: int = 5
+    poll_max_fires_per_day: int = 10
+
+    # MCP endpoint + GitHub OAuth AS. false = Rabbit-only process (own service/port/data dir).
+    mcp_enabled: bool = True
+
+    # Rabbit web app (off unless APP_ENABLED)
+    app_enabled: bool = False
+    google_client_id: str = ""
+    google_client_secret_name: str = ""
+    # verified Google email (lowercase) -> internal user_id
+    allowed_google_users: dict[str, str] = field(default_factory=dict)
+    app_session_ttl_seconds: int = 90 * 24 * 3600
+    vapid_private_key_secret_name: str = ""
+    vapid_subject: str = ""  # mailto: contact sent to push services
+
     @property
     def issuer_url(self) -> str:
         return self.public_base_url
@@ -98,6 +139,22 @@ class Settings:
     @property
     def oauth_state_dir(self) -> Path:
         return self.data_dir / "oauth"
+
+    @property
+    def app_dir(self) -> Path:
+        return self.data_dir / "app"
+
+    @property
+    def google_callback_url(self) -> str:
+        return f"{self.public_base_url}/app/auth/google/callback"
+
+    @property
+    def is_https(self) -> bool:
+        return self.public_base_url.startswith("https://")
+
+    @property
+    def poll_state_path(self) -> Path:
+        return self.data_dir / "poller" / "state.json"
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -137,4 +194,26 @@ class Settings:
             access_token_ttl_seconds=_int("ACCESS_TOKEN_TTL_SECONDS", 3600),
             refresh_token_ttl_seconds=_int("REFRESH_TOKEN_TTL_SECONDS", 30 * 24 * 3600),
             log_level=os.environ.get("LOG_LEVEL", "INFO").upper(),
+            poll_user_id=os.environ.get("POLL_USER_ID", "").strip(),
+            routine_id=os.environ.get("ROUTINE_ID", "").strip(),
+            routine_token_secret_name=os.environ.get(
+                "ROUTINE_TOKEN_SECRET_NAME", "garmin-mcp-routine-token"
+            ),
+            poll_dry_run=_bool("POLL_DRY_RUN", False),
+            poll_timezone=os.environ.get("POLL_TIMEZONE", "America/Denver").strip(),
+            poll_fast_hours=os.environ.get("POLL_FAST_HOURS", "5-9"),
+            poll_fast_minutes=_int("POLL_FAST_MINUTES", 5),
+            poll_max_fires_per_day=_int("POLL_MAX_FIRES_PER_DAY", 10),
+            mcp_enabled=_bool("MCP_ENABLED", True),
+            app_enabled=_bool("APP_ENABLED", False),
+            google_client_id=os.environ.get("GOOGLE_CLIENT_ID", "").strip(),
+            google_client_secret_name=os.environ.get(
+                "GOOGLE_CLIENT_SECRET_NAME", "garmin-mcp-google-client-secret"
+            ),
+            allowed_google_users=_parse_email_map(_list("ALLOWED_GOOGLE_USERS")),
+            app_session_ttl_seconds=_int("APP_SESSION_TTL_SECONDS", 90 * 24 * 3600),
+            vapid_private_key_secret_name=os.environ.get(
+                "VAPID_PRIVATE_KEY_SECRET_NAME", "garmin-mcp-vapid-private-key"
+            ),
+            vapid_subject=os.environ.get("VAPID_SUBJECT", "").strip(),
         )

@@ -70,13 +70,7 @@ install -m 0644 "$SRC/infra/garmin-mcp.service" /etc/systemd/system/garmin-mcp.s
 systemctl daemon-reload
 systemctl enable garmin-mcp
 if [[ -n "$DOMAIN" ]]; then
-  TLS_LINE=""
-  if [[ -f /etc/caddy/certs/origin.pem && -f /etc/caddy/certs/origin.key ]]; then
-    TLS_LINE="tls /etc/caddy/certs/origin.pem /etc/caddy/certs/origin.key"
-  fi
-  sed -e "s|__DOMAIN__|${DOMAIN}|g" -e "s|__TLS__|${TLS_LINE}|" "$SRC/infra/Caddyfile" > /etc/caddy/Caddyfile
-  caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
-  systemctl reload-or-restart caddy
+  DOMAIN="$DOMAIN" bash "$SRC/infra/render-caddy.sh"
 else
   echo "!! DOMAIN not set yet: leaving Caddy's default config; re-run with DOMAIN=... later."
 fi

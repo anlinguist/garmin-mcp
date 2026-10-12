@@ -112,7 +112,7 @@ def test_refreshed_tokens_written_back_encrypted(tmp_path, fernet_key) -> None:
 
     s.call(fn, {}, retry=True)
     assert store.load("andrew") == new
-    assert b"r2" not in (tmp_path / "andrew.fernet").read_bytes()
+    assert b"di_refresh_token" not in (tmp_path / "andrew.fernet").read_bytes()
 
 
 def test_error_messages_do_not_leak_payload(tmp_path, fernet_key) -> None:

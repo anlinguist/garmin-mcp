@@ -34,14 +34,13 @@ export function ThreadsSheet({ goal, threads, activeId, onSelect, onNew, onDelet
             <h2 className="modal-title truncate">{goal?.title ?? 'No goal yet'}</h2>
             <p className="text-xs text-muted-foreground">{goal ? goalCountdown(goal) || 'Edit goal' : 'Tap to set what you’re training for'}</p>
           </button>
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" onClick={onNew} title="New chat" aria-label="New chat">
-              <MessageSquarePlus className="size-4" />
-            </Button>
-            <button className="modal-close" aria-label="Close" onClick={onClose}><X className="size-4" /></button>
-          </div>
+          <button className="modal-close" aria-label="Close" onClick={onClose}><X className="size-4" /></button>
         </div>
         <div className="modal-body min-h-0 flex-1 overflow-y-auto pb-[max(12px,env(safe-area-inset-bottom))]">
+          <button onClick={onNew} aria-label="New chat"
+            className="flex w-full items-center gap-2 border-b border-border/40 px-4 py-3 text-left text-sm font-medium text-(--accent) transition-colors hover:bg-muted/50">
+            <MessageSquarePlus className="size-4" /> New chat
+          </button>
           {threads.map((t) => (
             <div key={t.id} role="button" tabIndex={0} onClick={() => onSelect(t.id)}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(t.id) } }}

@@ -1,6 +1,6 @@
 import { useSheetDrag } from '@/hooks/useSheetDrag'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Menu, MessageSquarePlus, Target, X } from 'lucide-react'
+import { Menu, Target, X } from 'lucide-react'
 import { Avatar } from '@/components/Avatar'
 import { MemorySheet } from '@/components/MemorySheet'
 import { RabbitLogo } from '@/components/RabbitLogo'
@@ -171,12 +171,8 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
     const id = el.dataset.msgId
     const item = items.find((it): it is ChatMessage => it.kind === 'message' && it.id === id)
     if (!item || item.error) return
-    hapticTap() // works where the hold timer counts as a gesture (Android)
+    hapticTap()
     setMenu({ item, el, canDiscuss: isCoach && item.turnKind === 'proactive' && !!item.turnId })
-  }, () => {
-    // iOS (no Vibration API): tap again on the finger lift, which iOS treats as a real
-    // gesture. Skipped where vibrate exists, so Android doesn't buzz twice.
-    if (typeof navigator.vibrate !== 'function') hapticTap()
   })
 
   // The coach log stays a timeline: a message typed there starts a new topic thread.
@@ -203,8 +199,9 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
   return (
     <div className="flex h-dvh flex-col">
       <header className="flex shrink-0 items-center gap-2 border-b border-(--border) px-3 pb-2.5 pt-[max(10px,env(safe-area-inset-top))]">
-        <Button variant="ghost" size="icon" aria-label="Chats" onClick={() => open('threads')}><Menu className="size-5" /></Button>
-        <button className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => open('threads')}>
+        {/* Rabbit + your goal: home, i.e. the coach log */}
+        <button className="flex min-w-0 flex-1 items-center gap-2 pl-1 text-left" aria-label="Coach log"
+          onClick={() => { if (coachId) openThread(coachId) }}>
           <RabbitLogo size={24} thinking={status === 'streaming'} className="shrink-0" />
           <span className="min-w-0">
             <span className="block truncate font-display text-lg leading-tight text-(--brand)">
@@ -216,8 +213,8 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
             </span>
           </span>
         </button>
-        <Button variant="ghost" size="icon" aria-label="New chat" disabled={busy} onClick={() => newThread()}>
-          <MessageSquarePlus className="size-5" />
+        <Button variant="ghost" size="icon" aria-label="Chats" onClick={() => open('threads')}>
+          <Menu className="size-5" />
         </Button>
         <button className="rounded-full" aria-label="Settings" onClick={() => open('settings')}>
           <Avatar name={me.profile.name || me.user_id} picture={me.profile.picture} />

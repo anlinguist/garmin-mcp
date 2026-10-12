@@ -5,12 +5,9 @@ import { useCallback, useRef } from 'react'
 const HOLD_MS = 450
 const SLOP_PX = 8
 
-/** ``onRelease`` runs on the finger lift that ends a long-press. Lifting is a real user
- *  gesture to iOS, unlike the hold timer, so it's where an iOS haptic can fire. */
-export function useLongPress(onTrigger: (el: HTMLElement) => void, onRelease?: () => void) {
+export function useLongPress(onTrigger: (el: HTMLElement) => void) {
   const timer = useRef<number | null>(null)
   const start = useRef<{ x: number; y: number } | null>(null)
-  const fired = useRef(false)
 
   const cancel = useCallback(() => {
     if (timer.current) window.clearTimeout(timer.current)
@@ -22,14 +19,8 @@ export function useLongPress(onTrigger: (el: HTMLElement) => void, onRelease?: (
     const el = e.currentTarget
     const t = e.touches[0]!
     start.current = { x: t.clientX, y: t.clientY }
-    fired.current = false
-    timer.current = window.setTimeout(() => { timer.current = null; fired.current = true; onTrigger(el) }, HOLD_MS)
+    timer.current = window.setTimeout(() => { timer.current = null; onTrigger(el) }, HOLD_MS)
   }, [onTrigger])
-
-  const onTouchEnd = useCallback(() => {
-    if (fired.current) { fired.current = false; onRelease?.() }
-    cancel()
-  }, [cancel, onRelease])
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
     const s = start.current
@@ -43,5 +34,5 @@ export function useLongPress(onTrigger: (el: HTMLElement) => void, onRelease?: (
     onTrigger(e.currentTarget)
   }, [cancel, onTrigger])
 
-  return { onTouchStart, onTouchMove, onTouchEnd, onTouchCancel: cancel, onContextMenu }
+  return { onTouchStart, onTouchMove, onTouchEnd: cancel, onTouchCancel: cancel, onContextMenu }
 }

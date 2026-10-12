@@ -1,7 +1,9 @@
 // Drag-to-dismiss for Dolly-style bottom sheets (.modal). Drag down anywhere on the
 // sheet (the body only when it's scrolled to the top) and release past a threshold to
-// close. Uses the CSS `translate` property, which composes with the sheet's slide-up
-// animation instead of being overridden by it.
+// close. The finger offset uses the CSS `translate` property, which composes with the
+// sheet's transform animations: on release the sheet stays where it was let go and the
+// regular exit animation (.modal--exit slide-down + overlay fade) carries it out from
+// there. `onClose` must run that exit animation (not unmount immediately).
 import { useCallback, useRef } from 'react'
 
 const CLOSE_PX = 90
@@ -41,8 +43,7 @@ export function useSheetDrag(onClose: () => void) {
     if (!s?.active || dy.current <= 0) return
     const v = dy.current / Math.max(1, Date.now() - s.t)
     if (dy.current > CLOSE_PX || v > CLOSE_VELOCITY) {
-      set(window.innerHeight, true)
-      setTimeout(onClose, 180)
+      onClose() // exit animation continues from the current drag position
     } else {
       set(0, true)
     }

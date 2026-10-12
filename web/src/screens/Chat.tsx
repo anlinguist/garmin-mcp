@@ -118,7 +118,6 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
   }, [items, status])
 
   const open = (s: Sheet) => { setClosing(false); setSheet(s) }
-  const settingsDrag = useSheetDrag(() => { setSheet(null); setClosing(false) })
   const coachId = threads.find((t) => t.kind === 'coach')?.id ?? null
   // "Tell Rabbit…": go to the coach log with the composer prefilled.
   const tellRabbit = (text: string) => {
@@ -127,6 +126,7 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
     if (sheet) { setSheet(null); setClosing(false) }
   }
   const close = () => { setClosing(true); setTimeout(() => { setSheet(null); setClosing(false) }, 200) }
+  const settingsDrag = useSheetDrag(close)
 
   async function newThread(from?: { thread_id: string; turn_id: string }) {
     setBusy(true)

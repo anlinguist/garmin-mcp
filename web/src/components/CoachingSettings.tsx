@@ -48,7 +48,7 @@ export function CoachingSettings({ me, onChange, onDevDone }: {
         )}
       </Group>
       {me.dev.tools.length > 0 && (
-        <Group label="Dev (fake Garmin)">
+        <Group label="Dev">
           {me.dev.tools.includes('simulate_workout') && (
             <Row icon={<Icon tone="muted"><FlaskConical /></Icon>} title="Simulate new workout" disabled={busy}
               onClick={() => void dev('simulate_workout', 'Simulated workout')} />

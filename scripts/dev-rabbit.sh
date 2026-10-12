@@ -52,6 +52,7 @@ case "$MODE" in
     command -v cloudflared >/dev/null || { echo "Install cloudflared: brew install cloudflared"; exit 1; }
     export PUBLIC_BASE_URL="$RABBIT_DEV_URL"
     unset DEV_NO_AUTH_USER  # publicly reachable: real Google sign-in only
+    export RABBIT_DEV_TOOLS=1  # Settings > Dev: "Send brief now" (runs in the server process)
     (cd web && bun run build >/dev/null)
     (cd web && bunx vite build --watch >/dev/null 2>&1) & pids+=($!)
     uv run garmin-mcp & pids+=($!)

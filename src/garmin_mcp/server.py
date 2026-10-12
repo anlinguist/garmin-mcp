@@ -268,6 +268,11 @@ def build_rabbit(settings: Settings, fernet_key: str, token_store: EncryptedFile
             return proactive.poll(user_id)
         dev = {"simulate_workout": simulate_workout,
                "brief_now": lambda user_id: proactive.send_brief(user_id).outcome.value}
+    elif proactive is not None and os.environ.get("RABBIT_DEV_TOOLS") == "1":
+        # Local phone testing on real Garmin (scripts/dev-rabbit.sh phone): only the brief,
+        # run inside this process so Garmin tokens stay owned by one process. Never set in
+        # production.
+        dev = {"brief_now": lambda user_id: proactive.send_brief(user_id).outcome.value}
     log_event(logger, logging.INFO, "app_enabled", push=push is not None,
               garmin_connect=logins is not None, fake_garmin=fake, chat=chat is not None,
               proactive=proactive is not None,

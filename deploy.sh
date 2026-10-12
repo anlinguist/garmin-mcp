@@ -10,6 +10,11 @@ set -euo pipefail
 cd "$(dirname "$0")"
 # shellcheck disable=SC1091
 source infra/config.env
+# IAP uploads are slow unless gcloud's Python has NumPy. Use a dedicated venv when one
+# exists (uv venv ~/.local/share/gcloud-python && uv pip install numpy), not this repo's .venv.
+if [[ -z "${CLOUDSDK_PYTHON:-}" && -x "$HOME/.local/share/gcloud-python/bin/python" ]]; then
+  export CLOUDSDK_PYTHON="$HOME/.local/share/gcloud-python/bin/python"
+fi
 
 APP=garmin-mcp PORT=8000 MODE=deploy
 for arg in "$@"; do

@@ -16,7 +16,7 @@ import { ToolCallCard, ToolCallGroup } from '@/components/chat/ToolCallCard'
 import { Button } from '@/components/ui/button'
 import {
   createThread, deleteThread, getPlanWeek, goalCountdown, listThreads, putSettings,
-  type Goal, type Me, type PlanWeek, type Thread, type WeekDay,
+  type Goal, type Me, type PlannedSession, type PlanWeek, type Thread, type WeekDay,
 } from '@/lib/api'
 import { useCoach, type QueuedSend, type ChartItem, type Approval, type ChatItem, type ChatMessage, type ThreadLink, type ToolCall } from '@/hooks/useCoach'
 import { ApprovalCard } from '@/components/chat/ApprovalCard'
@@ -216,11 +216,11 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
     document.addEventListener('visibilitychange', onVis)
     return () => document.removeEventListener('visibilitychange', onVis)
   }, [showPins, status, goal?.plan, loadWeek])
-  const askDay = (d: WeekDay) => {
-    const when = d.today ? 'today' : new Date(`${d.date}T12:00:00`).toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })
-    const what = d.sessions.filter((x) => x.status !== 'rest').map((x) => x.title).join(', ')
-    tellRabbit(`About ${when}${what ? ` (${what})` : ''}: `)
+  const askDay = (d: WeekDay, session?: PlannedSession) => {
+    const when = d.today ? "today's" : `${new Date(`${d.date}T12:00:00`).toLocaleDateString([], { weekday: 'long' })}'s`
+    tellRabbit(session ? `About ${when} ${session.title}: ` : `About ${d.today ? 'today' : when.slice(0, -2)}: `)
   }
+
 
   const press = useLongPress((el) => {
     if (el.dataset.threadId) { hapticTap(); setPeek(el.dataset.threadId); return }

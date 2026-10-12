@@ -2,10 +2,10 @@
 // which expands into planned vs. done by day. Weeks follow the plan's own weeks.
 import { useEffect, useRef, useState } from 'react'
 import {
-  Activity, Bike, Check, ChevronRight, Dumbbell, Footprints, Layers, Map as MapIcon, Moon, Waves,
+  Activity, Bike, Check, MessageCircle, ChevronRight, Dumbbell, Footprints, Layers, Map as MapIcon, Moon, Waves,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { Goal, PlanWeek, Sport, WeekDay } from '@/lib/api'
+import type { Goal, PlannedSession, PlanWeek, Sport, WeekDay } from '@/lib/api'
 
 const SPORT_ICON: Record<Sport, typeof Bike> = {
   swim: Waves, bike: Bike, run: Footprints, brick: Layers, strength: Dumbbell, rest: Moon, other: Activity,
@@ -75,49 +75,74 @@ function DayDot({ day }: { day: WeekDay }) {
   )
 }
 
-function DayRow({ day, onAsk }: { day: WeekDay; onAsk: (day: WeekDay) => void }) {
+type Item = { key: string; sport: Sport; title: string; minutes: number | null; detail: string
+  status: 'done' | 'missed' | 'planned' | 'rest' | 'extra'; doneMinutes?: number; session?: PlannedSession }
+
+function items(day: WeekDay): Item[] {
+  return [
+    ...day.sessions.map((s, i) => ({ key: `s${i}`, sport: s.sport, title: s.title, minutes: s.minutes,
+      detail: s.detail, status: s.status, doneMinutes: s.activity?.minutes, session: s })),
+    ...day.extra.map((a, i) => ({ key: `x${i}`, sport: a.sport, title: a.name, minutes: null,
+      detail: a.distance_km ? `${a.distance_km} km` : '', status: 'extra' as const, doneMinutes: a.minutes })),
+  ]
+}
+
+/** One day: a line per session; tapping a session opens its details and an Ask button.
+ *  Only the Ask button starts a chat, so opening and closing details never does. */
+function DayRow({ day, openKey, onToggle, onAsk }: {
+  day: WeekDay; openKey: string | null
+  onToggle: (key: string | null) => void
+  onAsk: (day: WeekDay, session?: PlannedSession) => void
+}) {
   const date = new Date(`${day.date}T12:00:00`)
-  const empty = !day.sessions.length && !day.extra.length
+  const list = items(day)
   return (
-    <button onClick={() => onAsk(day)}
-      className={cn('flex w-full gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-secondary',
-        day.today && 'bg-(--accent-subtle)')}>
-      <span className="w-9 shrink-0 pt-px text-center leading-tight">
+    <div className={cn('flex gap-3 rounded-lg px-2 py-1.5', day.today && 'bg-(--accent-subtle)')}>
+      <span className="w-9 shrink-0 pt-1.5 text-center leading-tight">
         <span className={cn('block text-[0.6471rem] font-semibold uppercase', day.today ? 'text-(--accent)' : 'text-muted-foreground')}>{day.weekday}</span>
         <span className="block text-[0.7647rem] text-foreground/80">{date.getDate()}</span>
       </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-1">
-        {empty && <span className="text-[0.7647rem] text-muted-foreground">Nothing planned</span>}
-        {day.sessions.map((s, i) => {
-          const Icon = SPORT_ICON[s.sport]
+      <span className="flex min-w-0 flex-1 flex-col">
+        {!list.length && <span className="py-1.5 text-[0.7647rem] text-muted-foreground">Nothing planned</span>}
+        {list.map((it) => {
+          const Icon = SPORT_ICON[it.sport]
+          const id = `${day.date}:${it.key}`
+          const expanded = openKey === id
+          const canOpen = it.status !== 'rest'
+          const dur = it.minutes && !hasDuration(it.title) ? fmtMinutes(it.minutes) : ''
           return (
-            <span key={i} className="flex items-start gap-2">
-              <Icon className={cn('mt-0.5 size-3.5 shrink-0', s.status === 'done' ? 'text-(--accent)' : 'text-muted-foreground')} />
-              <span className="min-w-0 flex-1">
-                <span className={cn('block text-[0.7647rem] leading-snug', s.status === 'rest' ? 'text-muted-foreground' : 'text-foreground')}>
-                  {s.title}{s.minutes && !hasDuration(s.title) ? <span className="text-muted-foreground"> · {fmtMinutes(s.minutes)}</span> : null}
+            <span key={it.key} className="flex flex-col">
+              <button type="button" disabled={!canOpen} aria-expanded={canOpen ? expanded : undefined}
+                onClick={() => onToggle(expanded ? null : id)}
+                className="flex w-full items-center gap-2 py-1.5 text-left disabled:cursor-default">
+                <Icon className={cn('size-3.5 shrink-0', it.status === 'done' || it.status === 'extra' ? 'text-(--accent)' : 'text-muted-foreground')} />
+                <span className={cn('min-w-0 flex-1 truncate text-[0.7647rem]', it.status === 'rest' ? 'text-muted-foreground' : 'text-foreground')}>
+                  {it.title}{dur && <span className="text-muted-foreground"> · {dur}</span>}
                 </span>
-                {s.detail && <span className="block text-[0.6471rem] leading-snug text-muted-foreground">{s.detail}</span>}
-              </span>
-              <span className={cn('shrink-0 text-[0.6471rem] leading-5',
-                s.status === 'done' ? 'text-(--accent)' : s.status === 'missed' ? 'text-(--danger)' : 'text-muted-foreground')}>
-                {s.status === 'done' ? `✓ ${fmtMinutes(s.activity!.minutes)}` : s.status === 'missed' ? 'Missed' : ''}
-              </span>
-            </span>
-          )
-        })}
-        {day.extra.map((a, i) => {
-          const Icon = SPORT_ICON[a.sport]
-          return (
-            <span key={`x${i}`} className="flex items-start gap-2">
-              <Icon className="mt-0.5 size-3.5 shrink-0 text-(--accent)" />
-              <span className="min-w-0 flex-1 truncate text-[0.7647rem] text-foreground">{a.name}</span>
-              <span className="shrink-0 text-[0.6471rem] leading-5 text-(--accent)">✓ {fmtMinutes(a.minutes)}</span>
+                <span className={cn('shrink-0 text-[0.6471rem]',
+                  it.status === 'done' || it.status === 'extra' ? 'text-(--accent)' : it.status === 'missed' ? 'text-(--danger)' : 'text-muted-foreground')}>
+                  {it.status === 'done' || it.status === 'extra' ? `✓ ${fmtMinutes(it.doneMinutes ?? 0)}` : it.status === 'missed' ? 'Missed' : ''}
+                </span>
+              </button>
+              {canOpen && (
+                <span className={cn('session-detail', expanded && 'session-detail--open')}>
+                  <span className="min-h-0 overflow-hidden">
+                    <span className="flex flex-col gap-2 pb-2 pl-5.5">
+                      {it.detail && <span className="text-[0.7059rem] leading-snug text-muted-foreground">{it.detail}</span>}
+                      <button type="button" tabIndex={expanded ? 0 : -1}
+                        onClick={() => onAsk(day, it.session)}
+                        className="inline-flex w-fit items-center gap-1.5 rounded-full bg-(--accent-subtle) px-2.5 py-1 text-[0.6471rem] font-medium text-(--accent) active:opacity-70">
+                        <MessageCircle className="size-3.5" /> Ask Rabbit
+                      </button>
+                    </span>
+                  </span>
+                </span>
+              )}
             </span>
           )
         })}
       </span>
-    </button>
+    </div>
   )
 }
 
@@ -126,9 +151,10 @@ export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay }: {
   week: PlanWeek | null
   loading: boolean
   onOpenPlan: () => void
-  onAskDay: (day: WeekDay) => void
+  onAskDay: (day: WeekDay, session?: PlannedSession) => void
 }) {
   const [open, setOpenState] = useState(false)
+  const [openKey, setOpenKey] = useState<string | null>(null)
   // Stay above the dimming until the drawer has finished sliding shut.
   const [raised, setRaised] = useState(false)
   const lowerTimer = useRef<number | null>(null)
@@ -196,10 +222,12 @@ export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay }: {
           <div className="min-h-0 overflow-hidden">
           <div className="max-h-[52vh] overflow-y-auto overscroll-contain px-1 py-1">
             <div className="flex items-center gap-2 px-2 py-1.5">
-              <span className="min-w-0 flex-1 text-[0.7059rem] leading-snug text-muted-foreground">
-                {hasPlan ? (week?.focus || goal.title) : 'No plan yet. Upload it or tell Rabbit about it.'}
+              <span className="min-w-0 flex-1 leading-snug">
+                <span className="block truncate text-[0.7059rem] text-foreground/85">
+                  {hasPlan ? (week?.focus?.replace(/\s*\([^)]*\)\s*$/, '') || goal.title) : 'No plan yet'}
+                </span>
                 {t && (t.planned_minutes > 0 || t.done_minutes > 0) && (
-                  <span className="block">{fmtMinutes(t.done_minutes)} done{t.planned_minutes ? ` of ~${fmtMinutes(t.planned_minutes)} planned` : ''}</span>
+                  <span className="block text-[0.6471rem] text-muted-foreground">{fmtMinutes(t.done_minutes)} of ~{fmtMinutes(t.planned_minutes)}</span>
                 )}
               </span>
               <button onClick={() => { setOpen(false); onOpenPlan() }}
@@ -210,8 +238,8 @@ export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay }: {
             {week?.garmin_error && <p className="px-2 py-1 text-[0.6471rem] text-(--warning)">{week.garmin_error}</p>}
             {week?.plan_status === 'error' && <p className="px-2 py-1 text-[0.6471rem] text-muted-foreground">Couldn't read this week from your plan. Showing what you've done.</p>}
             {week?.plan_status === 'over_budget' && <p className="px-2 py-1 text-[0.6471rem] text-muted-foreground">Planned sessions show up tomorrow (today's limit is used up).</p>}
-            {week?.days.map((d) => <DayRow key={d.date} day={d} onAsk={(day) => { setOpen(false); onAskDay(day) }} />)}
-            {week && <p className="px-2 pb-1 pt-0.5 text-[0.5882rem] text-muted-foreground">Tap a day to ask Rabbit about it.</p>}
+            {week?.days.map((d) => <DayRow key={d.date} day={d} openKey={openKey} onToggle={setOpenKey}
+              onAsk={(day, session) => { setOpen(false); onAskDay(day, session) }} />)}
           </div>
           </div>
         </div>

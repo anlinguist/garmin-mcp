@@ -187,4 +187,8 @@ html.kb-open .coach-pins { display: none; }
 }
 .week-drawer--open { grid-template-rows: 1fr; opacity: 1; visibility: visible;
   transition: grid-template-rows 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.15s ease, visibility 0s; }
-@media (prefers-reduced-motion: reduce) { .week-drawer, .week-dim { transition: none; } }
+/* A session's details open accordion-style under its line. */
+.session-detail { display: grid; grid-template-rows: 0fr; opacity: 0;
+  transition: grid-template-rows 0.22s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.15s ease; }
+.session-detail--open { grid-template-rows: 1fr; opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .week-drawer, .week-dim, .session-detail { transition: none; } }

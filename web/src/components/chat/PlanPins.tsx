@@ -140,68 +140,65 @@ export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay }: {
   }
   const reading = loading && hasPlan && !week
 
+  // One line: where you are in the plan and which days (falls back to "This week").
+  const where = week?.index && week.index > 0
+    ? `Week ${week.index}${week.weeks ? ` of ${week.weeks}` : ''}${week.phase && week.phase !== 'post-race' ? ` · ${cap(week.phase)}` : ''}`
+    : 'This week'
+
   return (
     <>
     {open && <div className="week-dim" onClick={() => setOpen(false)} aria-hidden />}
     <div className={cn('coach-pins relative shrink-0 border-b border-(--border) bg-(--bg) px-3 py-2', open && 'z-[46]')}>
       <div className="mx-auto max-w-2xl overflow-hidden rounded-xl border border-border bg-(--bg-surface) shadow-sm">
-        <button onClick={onOpenPlan}
-          className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-secondary">
-          <MapIcon className="size-4 shrink-0 text-(--accent)" />
+        <button onClick={() => setOpen((v) => !v)} aria-expanded={open}
+          className="flex w-full items-center gap-2 px-3 pb-2 pt-2 text-left">
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[0.7647rem] font-medium text-foreground">
-              {hasPlan ? planLine(week, goal) : 'No plan yet'}
-            </span>
-            <span className="block truncate text-[0.6471rem] text-muted-foreground">
-              {hasPlan ? (week?.focus || 'Your plan') : 'Upload it or tell Rabbit about it'}
-            </span>
-          </span>
-          <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-        </button>
-        <div className="border-t border-border">
-          <button onClick={() => setOpen((v) => !v)} aria-expanded={open}
-            className="flex w-full items-center gap-2 px-3 pb-2 pt-1.5 text-left">
-            <span className="min-w-0 flex-1">
-              <span className="flex items-baseline gap-2">
-                <span className="truncate text-[0.5882rem] font-semibold uppercase tracking-widest text-muted-foreground">
-                  This week{week ? ` · ${fmtRange(week.start, week.end)}` : ''}
-                </span>
-                <span className="ml-auto shrink-0 text-[0.6471rem] text-muted-foreground">
-                  {reading ? 'Reading your plan…' : progress}
-                </span>
+            <span className="flex items-baseline gap-2">
+              <span className="truncate text-[0.5882rem] font-semibold uppercase tracking-widest text-muted-foreground">
+                {where}{week ? ` · ${fmtRange(week.start, week.end)}` : ''}
               </span>
-              {week ? (
-                <span className="mt-1.5 flex justify-between px-1">
-                  {week.days.map((d) => <DayDot key={d.date} day={d} />)}
-                </span>
-              ) : (
-                <span className="mt-1.5 flex justify-between px-1">
-                  {Array.from({ length: 7 }, (_, i) => (
-                    <span key={i} className="flex flex-col items-center gap-1">
-                      <span className="h-2.5 w-2 rounded bg-(--bg-elevated)" />
-                      <span className="size-[18px] animate-pulse rounded-full bg-(--bg-elevated)" />
-                    </span>
-                  ))}
-                </span>
-              )}
+              <span className="ml-auto shrink-0 text-[0.6471rem] text-muted-foreground">
+                {reading ? 'Reading your plan…' : progress}
+              </span>
             </span>
-            <ChevronDown className={cn('size-4 shrink-0 self-center text-muted-foreground transition-transform', open && 'rotate-180')} />
-          </button>
-          {open && week && (
-            <div className="max-h-[42vh] overflow-y-auto overscroll-contain border-t border-border px-1 py-1">
-              {week.garmin_error && <p className="px-2 py-1 text-[0.6471rem] text-(--warning)">{week.garmin_error}</p>}
-              {week.plan_status === 'error' && <p className="px-2 py-1 text-[0.6471rem] text-muted-foreground">Couldn't read this week from your plan. Showing what you've done.</p>}
-              {week.plan_status === 'over_budget' && <p className="px-2 py-1 text-[0.6471rem] text-muted-foreground">Planned sessions show up tomorrow (today's limit is used up).</p>}
-              {t && (t.planned_minutes > 0 || t.done_minutes > 0) && (
-                <p className="px-2 pb-1 pt-1 text-[0.7059rem] text-muted-foreground">
-                  {fmtMinutes(t.done_minutes)} done{t.planned_minutes ? ` of ~${fmtMinutes(t.planned_minutes)} planned` : ''}
-                </p>
-              )}
-              {week.days.map((d) => <DayRow key={d.date} day={d} onAsk={onAskDay} />)}
-              <p className="px-2 pb-1 pt-0.5 text-[0.5882rem] text-muted-foreground">Tap a day to ask Rabbit about it.</p>
+            {week ? (
+              <span className="mt-1.5 flex justify-between px-1">
+                {week.days.map((d) => <DayDot key={d.date} day={d} />)}
+              </span>
+            ) : (
+              <span className="mt-1.5 flex justify-between px-1">
+                {Array.from({ length: 7 }, (_, i) => (
+                  <span key={i} className="flex flex-col items-center gap-1">
+                    <span className="h-2.5 w-2 rounded bg-(--bg-elevated)" />
+                    <span className="size-[18px] animate-pulse rounded-full bg-(--bg-elevated)" />
+                  </span>
+                ))}
+              </span>
+            )}
+          </span>
+          <ChevronDown className={cn('size-4 shrink-0 self-center text-muted-foreground transition-transform', open && 'rotate-180')} />
+        </button>
+        {open && (
+          <div className="max-h-[48vh] overflow-y-auto overscroll-contain border-t border-border px-1 py-1">
+            <div className="flex items-center gap-2 px-2 py-1.5">
+              <span className="min-w-0 flex-1 text-[0.7059rem] leading-snug text-muted-foreground">
+                {hasPlan ? (week?.focus || goal.title) : 'No plan yet. Upload it or tell Rabbit about it.'}
+                {t && (t.planned_minutes > 0 || t.done_minutes > 0) && (
+                  <span className="block">{fmtMinutes(t.done_minutes)} done{t.planned_minutes ? ` of ~${fmtMinutes(t.planned_minutes)} planned` : ''}</span>
+                )}
+              </span>
+              <button onClick={() => { setOpen(false); onOpenPlan() }}
+                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border px-2.5 py-1 text-[0.6471rem] text-foreground hover:bg-secondary">
+                <MapIcon className="size-3.5 text-(--accent)" /> {hasPlan ? 'Open plan' : 'Add plan'} <ChevronRight className="size-3" />
+              </button>
             </div>
-          )}
-        </div>
+            {week?.garmin_error && <p className="px-2 py-1 text-[0.6471rem] text-(--warning)">{week.garmin_error}</p>}
+            {week?.plan_status === 'error' && <p className="px-2 py-1 text-[0.6471rem] text-muted-foreground">Couldn't read this week from your plan. Showing what you've done.</p>}
+            {week?.plan_status === 'over_budget' && <p className="px-2 py-1 text-[0.6471rem] text-muted-foreground">Planned sessions show up tomorrow (today's limit is used up).</p>}
+            {week?.days.map((d) => <DayRow key={d.date} day={d} onAsk={(day) => { setOpen(false); onAskDay(day) }} />)}
+            {week && <p className="px-2 pb-1 pt-0.5 text-[0.5882rem] text-muted-foreground">Tap a day to ask Rabbit about it.</p>}
+          </div>
+        )}
       </div>
     </div>
     </>

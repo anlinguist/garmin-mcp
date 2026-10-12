@@ -512,3 +512,36 @@ def test_password_never_reaches_logs_or_responses(h: Harness, caplog) -> None:
     with caplog.at_level(logging.DEBUG):
         go()
     assert SECRET_PW not in caplog.text
+
+
+def test_index_has_absolute_link_preview_image(tmp_path, monkeypatch) -> None:
+    import asyncio
+
+    import httpx2
+    from starlette.applications import Starlette
+
+    from garmin_mcp import webapp
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text(
+        '<meta property="og:image" content="__RABBIT_ORIGIN__/app/og-image.png" />')
+    (dist / "og-image.png").write_bytes(b"\x89PNG")
+    monkeypatch.setattr(webapp, "WEB_DIST", dist)
+    from garmin_mcp.appstore import AppStore
+    from garmin_mcp.config import Settings
+    from garmin_mcp.tokens import generate_key
+    from garmin_mcp.webauth import WebAuth
+    settings = Settings(public_base_url="https://rabbit.example.com", data_dir=tmp_path,
+                        app_enabled=True, mcp_enabled=False)
+    auth = WebAuth(settings, AppStore(tmp_path / "app", generate_key()), "", dev_user="friend")
+    app = Starlette(routes=webapp.build_app_routes(settings, auth, None, None, None, None))
+
+    async def go() -> None:
+        t = httpx2.ASGITransport(app=app)
+        async with httpx2.AsyncClient(transport=t, base_url="https://rabbit.example.com") as c:
+            for path in ("/app/", "/app/index.html"):
+                r = await c.get(path)
+                assert 'content="https://rabbit.example.com/app/og-image.png"' in r.text
+                assert "__RABBIT_ORIGIN__" not in r.text and "content-security-policy" in r.headers
+            assert (await c.get("/app/og-image.png")).status_code == 200
+    asyncio.run(go())

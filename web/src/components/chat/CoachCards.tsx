@@ -32,7 +32,7 @@ export function ThreadLinkCard({ thread, onOpen }: { thread: Thread | undefined;
   const title = thread ? thread.title || 'New chat' : 'Deleted chat'
   return (
     <button onClick={onOpen} disabled={!thread}
-      className="flex w-full max-w-[85%] items-center gap-2.5 rounded-xl border border-dashed border-(--accent)/40 bg-(--accent-subtle) px-3 py-2 text-left transition-colors hover:bg-(--accent)/10 disabled:opacity-50">
+      className="flex w-full items-center gap-2.5 rounded-xl border border-dashed border-(--accent)/40 bg-(--accent-subtle) px-3 py-2 text-left transition-colors hover:bg-(--accent)/10 disabled:opacity-50">
       <MessageSquareText className="size-4 shrink-0 text-(--accent)" />
       <span className="min-w-0">
         <span className="block text-[10px] font-semibold uppercase tracking-widest text-(--accent)">Chat started</span>

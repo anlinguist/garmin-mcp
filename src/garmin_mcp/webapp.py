@@ -17,7 +17,7 @@ from typing import Any
 
 import anyio
 from starlette.requests import Request
-from starlette.responses import JSONResponse, RedirectResponse, Response, StreamingResponse
+from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from starlette.routing import BaseRoute, Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.types import Scope
@@ -610,7 +610,15 @@ def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
               methods=["POST"]),
     ]
     if (WEB_DIST / "index.html").is_file():
-        routes.append(Mount("/app", app=_Static(directory=WEB_DIST, html=True)))
+        async def index(request: Request) -> Response:
+            # Read per request: the dev build rewrites it on save.
+            html = (WEB_DIST / "index.html").read_text().replace(
+                "__RABBIT_ORIGIN__", settings.public_base_url)
+            return HTMLResponse(html, headers={"Cache-Control": "no-cache",
+                                               "Content-Security-Policy": CSP})
+        routes += [Route("/app/", index, methods=["GET", "HEAD"]),
+                   Route("/app/index.html", index, methods=["GET", "HEAD"]),
+                   Mount("/app", app=_Static(directory=WEB_DIST, html=True))]
     else:
         routes.append(Route("/app/{path:path}", not_built, methods=["GET"]))
     return routes

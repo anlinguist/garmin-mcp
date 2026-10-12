@@ -14,6 +14,7 @@ ROUTINE_SECRET=garmin-mcp-routine-token
 GOOGLE_SECRET=garmin-mcp-google-client-secret
 VAPID_SECRET=garmin-mcp-vapid-private-key
 RABBIT_FERNET_SECRET=garmin-mcp-rabbit-fernet-key
+ANTHROPIC_SECRET=garmin-mcp-anthropic-api-key
 IP_NAME=garmin-mcp-ip
 WEB_TAG=garmin-mcp-web
 SSH_TAG=garmin-mcp-iap-ssh
@@ -56,8 +57,12 @@ if ! exists g secrets describe "$RABBIT_FERNET_SECRET"; then
   python3 -c 'import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode(),end="")' |
     g secrets create "$RABBIT_FERNET_SECRET" --replication-policy=automatic --data-file=-
 fi
+if ! exists g secrets describe "$ANTHROPIC_SECRET"; then
+  # Created empty; add the Claude API key for Rabbit's coach agent (README).
+  g secrets create "$ANTHROPIC_SECRET" --replication-policy=automatic
+fi
 for s in "$FERNET_SECRET" "$GH_SECRET" "$ROUTINE_SECRET" "$GOOGLE_SECRET" "$VAPID_SECRET" \
-         "$RABBIT_FERNET_SECRET"; do
+         "$RABBIT_FERNET_SECRET" "$ANTHROPIC_SECRET"; do
   # Per-secret binding: the VM can read exactly these secrets and nothing else.
   g secrets add-iam-policy-binding "$s" --member="serviceAccount:$SA" \
     --role=roles/secretmanager.secretAccessor --condition=None >/dev/null

@@ -220,7 +220,8 @@ To enable it:
 ## Rabbit web app (optional)
 
 Rabbit is a phone-friendly coach app at `$PUBLIC_BASE_URL/app/` for people who won't set up an MCP
-connector: Google sign-in, Web Push, and (in later phases) a chat agent and Garmin connect page. The
+connector: Google sign-in, Web Push, a Connect Garmin page, and a coach agent (Claude Haiku) with
+morning briefs, workout notes, a plan view and threads. The
 plan is in `docs/plans/web-app.md`.
 
 **It runs as a separate service** so testing it can never take down the MCP connector:
@@ -261,8 +262,12 @@ the MCP server. Local keys, sessions and push subscriptions live in `./data/rabb
   Run `scripts/dev-rabbit.sh phone`. The frontend rebuilds on save; refresh the phone.
 
 On the VM:
-1. `./infra/setup.sh` creates `garmin-mcp-google-client-secret` (empty), `garmin-mcp-vapid-private-key`
-   and `garmin-mcp-rabbit-fernet-key` (generated) and grants the VM access.
+1. `./infra/setup.sh` creates `garmin-mcp-google-client-secret` and `garmin-mcp-anthropic-api-key`
+   (empty), `garmin-mcp-vapid-private-key` and `garmin-mcp-rabbit-fernet-key` (generated) and grants
+   the VM access. Store the Claude API key (from the Console; set a spend limit there too):
+   ```bash
+   pbpaste | tr -d '\n' | gcloud secrets versions add garmin-mcp-anthropic-api-key --project <PROJECT> --data-file=-
+   ```
 2. Google Cloud console → **APIs & Services → OAuth consent screen**: External, scopes `openid` and
    `email` only, then **Publish app** (no verification needed for these scopes). **Credentials →
    Create OAuth client ID → Web application**, authorized redirect URI

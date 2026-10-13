@@ -1,6 +1,7 @@
 import { useSheetDrag } from '@/hooks/useSheetDrag'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { MessagesSquare, Target, X } from 'lucide-react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { ChevronLeft, MessagesSquare, Target, X } from 'lucide-react'
+import { useEdgeSwipe } from '@/hooks/useEdgeSwipe'
 import { Avatar } from '@/components/Avatar'
 import { MemorySheet } from '@/components/MemorySheet'
 import { PlanSheet } from '@/components/PlanSheet'
@@ -76,7 +77,7 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
   const [queued, setQueued] = useState<QueuedSend | null>(null)
   // A new chat is a client-side draft until its first message is sent (then it's created).
   const [pending, setPending] = useState<{ seed?: { thread_id: string; turn_id: string }; seedMsg?: ChatMessage } | null>(null)
-  const { items, status, send, stop, decide, reload } =
+  const { items, ready, status, send, stop, decide, reload } =
     useCoach(threadId, me.chat.active_turn, queued, () => setQueued(null))
   const [sheet, setSheet] = useState<Sheet | null>(me.garmin.connected ? null : 'settings')
   const [closing, setClosing] = useState(false)
@@ -103,7 +104,8 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
     const r = await listThreads()
     setThreads(r.threads)
     setGoal(r.goal)
-    setThreadId((cur) => select ?? (cur && r.threads.some((t) => t.id === cur) ? cur : r.threads[0]?.id ?? null))
+    setThreadId((cur) => select ?? (cur && r.threads.some((t) => t.id === cur) ? cur
+      : r.threads.find((t) => t.kind === 'coach')?.id ?? r.threads[0]?.id ?? null))
   }, [])
 
   useEffect(() => { void refreshThreads() }, [refreshThreads])
@@ -222,6 +224,24 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
   }
 
   const isCoach = !pending && thread?.kind === 'coach'
+  // The coach log is home; other chats sit on top of it, with a back button and an edge
+  // swipe. The log's last rows are kept so it can be drawn underneath a chat during the
+  // swipe, and shown at once on the way back while its history reloads.
+  const coachRows = useRef<Row[] | null>(null)
+  if (isCoach && ready && status === 'idle') coachRows.current = rows
+  const shownRows = ready ? rows : isCoach ? coachRows.current ?? [] : []
+  const settled = ready && status !== 'loading'
+  const goBack = () => { if (coachId) openThread(coachId) }
+  const inChat = !isCoach && !!coachId
+  const screen = useRef<HTMLDivElement>(null)
+  const under = useRef<HTMLDivElement>(null)
+  const underFeed = useRef<HTMLDivElement>(null)
+  useEdgeSwipe(screen, under, { enabled: inChat && !sheet && !menu && !peek, onBack: goBack })
+  // The log underneath sits at its newest entries, where the real log opens.
+  useLayoutEffect(() => {
+    const el = underFeed.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [inChat, threadId])
 
   // Pinned plan + "This week" cards in the coach log. Refreshed when the log opens, after
   // each reply (a plan may have changed) and when the app comes back to the foreground.
@@ -274,25 +294,29 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
   }
   const suggestions = isCoach ? COACH_SUGGESTIONS : TOPIC_SUGGESTIONS
   const countdown = goalCountdown(goal)
+  const coachThread = coachId ? byId[coachId] : undefined
 
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      {/* With the week card pinned under it, the card itself separates header and feed. */}
-      <header className={`flex shrink-0 items-center gap-2 px-3 pb-2.5 pt-[max(10px,env(safe-area-inset-top))] ${showPins ? '' : 'border-b border-(--border)'}`}>
-        {/* Rabbit + your goal: home, i.e. the coach log */}
-        <button className="flex min-w-0 flex-1 items-center gap-2.5 text-left" aria-label="Coach log"
-          onClick={() => { if (coachId) openThread(coachId) }}>
+  function renderHeader(isLog: boolean, under = false) {
+    const pinned = isLog && !!goal // the week card under it separates header and feed
+    return (
+      <header className={`flex shrink-0 items-center gap-2 px-3 pb-2.5 pt-[max(10px,env(safe-area-inset-top))] ${pinned ? '' : 'border-b border-(--border)'}`}>
+        {!isLog && (
+          <Button variant="ghost" size="icon" className="-mr-1" aria-label="Back to the coach log" onClick={goBack}>
+            <ChevronLeft className="size-5" />
+          </Button>
+        )}
+        <button className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+          aria-label={isLog ? 'Coach log' : 'Back to the coach log'} onClick={goBack}>
           {/* App-icon tile, like the Home Screen icon (hops while Rabbit is replying) */}
           <span className="logo-tile flex size-[38px] shrink-0 items-center justify-center rounded-[11px] bg-(--brand) shadow-sm">
-            <RabbitLogo size={32} thinking={status === 'streaming'} />
+            <RabbitLogo size={32} thinking={!under && status === 'streaming'} />
           </span>
           <span className="min-w-0">
             <span className="block truncate font-display text-lg leading-tight text-(--brand)">
-              {pending ? 'New chat' : isCoach || !thread ? 'Rabbit' : thread.title || 'New chat'}
+              {isLog ? 'Rabbit' : pending ? 'New chat' : thread?.title || 'New chat'}
             </span>
             <span className="block truncate text-[0.6471rem] leading-tight text-muted-foreground">
               {goal ? `${goal.title}${countdown ? ` · ${countdown}` : ''}` : 'No goal set'}
-              {isCoach ? ' · Coach log' : ''}
             </span>
           </span>
         </button>
@@ -303,6 +327,59 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
           <Avatar name={me.profile.name || me.user_id} picture={me.profile.picture} />
         </button>
       </header>
+    )
+  }
+
+  function renderRows(list: Row[], inLog: boolean) {
+    return list.map((r) => {
+      if (r.kind === 'link') {
+        if (!byId[r.item.threadId]) return null // chat was deleted
+        return <ThreadLinkCard key={r.item.id} thread={byId[r.item.threadId]} pressProps={press}
+          onOpen={() => openThread(r.item.threadId)} />
+      }
+      if (r.kind === 'chart') {
+        return (
+          <div key={r.item.id} className="w-full max-w-[92%] [&>figure]:my-0 [&>figure]:bg-background">
+            <Chart spec={r.item.spec} />
+          </div>
+        )
+      }
+      if (r.kind === 'approval') {
+        return <ApprovalCard key={r.item.id} item={r.item}
+          onDecide={(ok, why) => void decide(r.item.id, ok, why).then(() => { if (ok) onChange() })} />
+      }
+      if (r.kind === 'tool') return <ToolCallCard key={r.item.id} toolCall={r.item} />
+      if (r.kind === 'group') return <ToolCallGroup key={`g-${r.items[0]!.id}`} toolCalls={r.items} />
+      const m = r.item
+      const seed = m.turnKind === 'seed'
+      return (
+        <div key={m.id} className={seed ? 'rounded-xl border border-dashed border-border p-2' : ''}>
+          {seed && <p className="mb-1 pl-1 text-[0.5882rem] font-semibold uppercase tracking-widest text-muted-foreground">From your coach log</p>}
+          <CoachHeader label={m.label} ts={m.ts} />
+          <MessageBubble message={m} showLabel={r.showLabel} pressProps={press} />
+          {inLog && m.turnKind === 'proactive' && m.turnId && coachThread && (
+            <DiscussButton busy={busy} onClick={() => newThread({ thread_id: coachThread.id, turn_id: m.turnId! }, m)} />
+          )}
+        </div>
+      )
+    })
+  }
+
+  return (
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+      {inChat && (
+        // A still copy of the coach log under the open chat, revealed by the edge swipe.
+        <div ref={under} inert aria-hidden className="absolute inset-0 flex flex-col bg-background" style={{ visibility: 'hidden' }}>
+          {renderHeader(true, true)}
+          {goal && <PlanPins goal={goal} week={week} loading={false} onOpenPlan={() => {}} onAskDay={() => {}} />}
+          <div ref={underFeed} className="min-h-0 flex-1 overflow-hidden px-4">
+            <div className="mx-auto max-w-2xl space-y-4 py-4">{renderRows(coachRows.current ?? [], true)}</div>
+          </div>
+          <Composer still disabled streaming={false} onStop={() => {}} onSend={() => {}} placeholder="Start a new chat…" />
+        </div>
+      )}
+      <div ref={screen} className="relative flex min-h-0 flex-1 flex-col bg-background">
+      {renderHeader(!pending && isCoach)}
 
       {!me.garmin.connected && (
         <button onClick={() => open('settings')}
@@ -347,7 +424,7 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
             </div>
           </div>
         </div>
-      ) : items.length === 0 && status !== 'loading' && isCoach && !goal ? (
+      ) : items.length === 0 && settled && isCoach && !goal ? (
         <div className="flex flex-1 flex-col justify-end overflow-y-auto px-4 py-4">
           <div className="mx-auto w-full max-w-2xl">
             <div className="mb-3 flex items-center gap-2 pl-1"><RabbitLogo size={22} />
@@ -364,7 +441,7 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
             </div>
           </div>
         </div>
-      ) : items.length === 0 && status !== 'loading' ? (
+      ) : items.length === 0 && settled ? (
         <div className="chat-empty flex flex-1 flex-col items-center justify-center px-6 text-center">
           <EmptyHero gap={20} suggestions={suggestions.map((s) => (
               <button key={s} disabled={!me.chat.available}
@@ -388,38 +465,7 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
             atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
           }}>
           <div className="mx-auto max-w-2xl space-y-4 py-4">
-            {rows.map((r) => {
-              if (r.kind === 'link') {
-                if (!byId[r.item.threadId]) return null // chat was deleted
-                return <ThreadLinkCard key={r.item.id} thread={byId[r.item.threadId]} pressProps={press}
-                  onOpen={() => openThread(r.item.threadId)} />
-              }
-              if (r.kind === 'chart') {
-                return (
-                  <div key={r.item.id} className="w-full max-w-[92%] [&>figure]:my-0 [&>figure]:bg-background">
-                    <Chart spec={r.item.spec} />
-                  </div>
-                )
-              }
-              if (r.kind === 'approval') {
-                return <ApprovalCard key={r.item.id} item={r.item}
-                  onDecide={(ok, why) => void decide(r.item.id, ok, why).then(() => { if (ok) onChange() })} />
-              }
-              if (r.kind === 'tool') return <ToolCallCard key={r.item.id} toolCall={r.item} />
-              if (r.kind === 'group') return <ToolCallGroup key={`g-${r.items[0]!.id}`} toolCalls={r.items} />
-              const m = r.item
-              const seed = m.turnKind === 'seed'
-              return (
-                <div key={m.id} className={seed ? 'rounded-xl border border-dashed border-border p-2' : ''}>
-                  {seed && <p className="mb-1 pl-1 text-[0.5882rem] font-semibold uppercase tracking-widest text-muted-foreground">From your coach log</p>}
-                  <CoachHeader label={m.label} ts={m.ts} />
-                  <MessageBubble message={m} showLabel={r.showLabel} pressProps={press} />
-                  {isCoach && m.turnKind === 'proactive' && m.turnId && thread && (
-                    <DiscussButton busy={busy} onClick={() => newThread({ thread_id: thread.id, turn_id: m.turnId! }, m)} />
-                  )}
-                </div>
-              )
-            })}
+            {renderRows(shownRows, isCoach)}
             {thinking && (
               <div className="flex items-center gap-2 pl-1 text-sm text-muted-foreground">
                 <div className="thinking-dots flex items-center gap-[3px]"><span /><span /><span /></div>
@@ -439,6 +485,7 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
         placeholder={!me.chat.available ? 'Chat isn’t configured yet' : waitingOnYou ? 'Approve or decline above…'
           : status === 'streaming' ? 'Rabbit is replying…' : isCoach ? 'Start a new chat…' : 'Ask Rabbit…'}
       />
+      </div>
 
       {menu && (
         <MessageMenu target={menu} onClose={() => setMenu(null)} onToast={showToast}

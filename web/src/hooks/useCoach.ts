@@ -89,6 +89,8 @@ export function useCoach(threadId: string | null, activeTurn: string | null,
   queuedRef.current = queued
   const [items, setItems] = useState<ChatItem[]>([])
   const [status, setStatus] = useState<Status>('loading')
+  // Which thread ``items`` belong to: right after a switch they're still the old thread's.
+  const [loadedId, setLoadedId] = useState<string | null>(null)
   const turnRef = useRef<{ id: string; seen: number } | null>(null)
   const openMsg = useRef<string | null>(null)
   const busy = useRef(false)
@@ -184,6 +186,7 @@ export function useCoach(threadId: string | null, activeTurn: string | null,
     } catch {
       setItems([])
     }
+    setLoadedId(threadId)
   }, [threadId])
 
   const first = useRef(true)
@@ -256,5 +259,5 @@ export function useCoach(threadId: string | null, activeTurn: string | null,
     }).catch(() => {})
   }, [])
 
-  return { items, status, send, stop, decide, clear, reload: loadHistory }
+  return { items, ready: loadedId === threadId, status, send, stop, decide, clear, reload: loadHistory }
 }

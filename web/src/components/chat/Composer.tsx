@@ -16,7 +16,7 @@ let n = 0
 export const ATTACH_INPUT_ID = 'rabbit-attach'
 
 
-export function Composer({ disabled, streaming, onSend, onStop, placeholder, draft }: {
+export function Composer({ disabled, streaming, onSend, onStop, placeholder, draft, still }: {
   disabled: boolean
   streaming: boolean
   onSend: (text: string, attachments: AttachmentMeta[]) => void
@@ -24,6 +24,9 @@ export function Composer({ disabled, streaming, onSend, onStop, placeholder, dra
   placeholder: string
   /** prefill from elsewhere ("Tell Rabbit…"); bump n to apply again */
   draft?: { text: string; n: number } | null
+  /** a non-interactive copy (drawn under a chat for the swipe back): no file input, so
+   *  ATTACH_INPUT_ID stays unique */
+  still?: boolean
 }) {
   const [input, setInput] = useState('')
   const [files, setFiles] = useState<Pending[]>([])
@@ -156,8 +159,8 @@ export function Composer({ disabled, streaming, onSend, onStop, placeholder, dra
         </button>
         {/* id lets "Upload my plan" buttons elsewhere open this picker via <label htmlFor>,
             which keeps the tap a real user gesture (iOS won't open pickers otherwise) */}
-        <input ref={picker} id={ATTACH_INPUT_ID} type="file" className="hidden" multiple accept={ACCEPT}
-          onChange={(e) => { addFiles(Array.from(e.target.files ?? [])); e.target.value = '' }} />
+        {!still && <input ref={picker} id={ATTACH_INPUT_ID} type="file" className="hidden" multiple accept={ACCEPT}
+          onChange={(e) => { addFiles(Array.from(e.target.files ?? [])); e.target.value = '' }} />}
         <textarea
           ref={ref}
           rows={1}

@@ -8,7 +8,7 @@
 // is clearly sideways, so scrolling and long-presses elsewhere are untouched. Listeners are
 // native (not React's) because touchmove has to be non-passive to stop the feed scrolling
 // mid-swipe. Installed web apps have no system back gesture, so the edge is ours.
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { flushSync } from 'react-dom'
 
 const EDGE_PX = 24
@@ -107,4 +107,28 @@ export function useEdgeSwipe(
       el.removeEventListener('touchcancel', onEnd)
     }
   }, [ref, underRef, enabled])
+
+  // The same motion without a finger: `slideIn` when a chat opens over the log, and
+  // `slideBack` for the back button (the screen leaves, then `onBack` runs).
+  const slide = useCallback((from: number, to: number, ms: number, done?: () => void) => {
+    const el = ref.current, under = underRef.current
+    if (!el || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) { done?.(); return }
+    const w = el.offsetWidth || 1
+    const pos = (p: number) => ({ transform: `translateX(${p * w}px)`, boxShadow: '-8px 0 24px rgba(0,0,0,0.14)' })
+    const below = (p: number) => ({ transform: `translateX(${-PARALLAX * w * (1 - p)}px)`, filter: `brightness(${0.92 + 0.08 * p})` })
+    // fill: hold the end frame until `done` has swapped the view, so nothing flashes.
+    const opts = { duration: ms, easing: EASE, fill: 'forwards' as const }
+    if (under) under.style.visibility = 'visible'
+    const a = el.animate([pos(from), pos(to)], opts)
+    const u = under?.animate([below(from), below(to)], opts)
+    a.onfinish = () => {
+      if (done) flushSync(done)
+      a.cancel()
+      u?.cancel()
+      if (under) under.style.visibility = 'hidden'
+    }
+  }, [ref, underRef])
+  const slideIn = useCallback(() => slide(1, 0, 300), [slide])
+  const slideBack = useCallback(() => slide(0, 1, 240, () => back.current()), [slide])
+  return { slideIn, slideBack }
 }

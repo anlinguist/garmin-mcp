@@ -236,7 +236,13 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
   const screen = useRef<HTMLDivElement>(null)
   const under = useRef<HTMLDivElement>(null)
   const underFeed = useRef<HTMLDivElement>(null)
-  useEdgeSwipe(screen, under, { enabled: inChat && !sheet && !menu && !peek, onBack: goBack })
+  const { slideIn, slideBack } = useEdgeSwipe(screen, under, { enabled: inChat && !sheet && !menu && !peek, onBack: goBack })
+  // Opening a chat from the log slides it in over the log.
+  const wasInChat = useRef(inChat)
+  useLayoutEffect(() => {
+    if (inChat && !wasInChat.current) slideIn()
+    wasInChat.current = inChat
+  }, [inChat, slideIn])
   // The log underneath sits at its newest entries, where the real log opens.
   useLayoutEffect(() => {
     const el = underFeed.current
@@ -301,12 +307,12 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
     return (
       <header className={`flex shrink-0 items-center gap-2 px-3 pb-2.5 pt-[max(10px,env(safe-area-inset-top))] ${pinned ? '' : 'border-b border-(--border)'}`}>
         {!isLog && (
-          <Button variant="ghost" size="icon" className="-mr-1" aria-label="Back to the coach log" onClick={goBack}>
+          <Button variant="ghost" size="icon" className="-mr-1" aria-label="Back to the coach log" onClick={slideBack}>
             <ChevronLeft className="size-5" />
           </Button>
         )}
         <button className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
-          aria-label={isLog ? 'Coach log' : 'Back to the coach log'} onClick={goBack}>
+          aria-label={isLog ? 'Coach log' : 'Back to the coach log'} onClick={isLog ? goBack : slideBack}>
           {/* App-icon tile, like the Home Screen icon (hops while Rabbit is replying) */}
           <span className="logo-tile flex size-[38px] shrink-0 items-center justify-center rounded-[11px] bg-(--brand) shadow-sm">
             <RabbitLogo size={32} thinking={!under && status === 'streaming'} />
@@ -423,6 +429,11 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
               </EmptyHero>
             </div>
           </div>
+        </div>
+      ) : !ready && !isCoach ? (
+        // Opening a chat: Rabbit hops while its messages load.
+        <div className="chat-loading flex flex-1 items-center justify-center" role="status" aria-label="Loading chat">
+          <RabbitLogo size={64} thinking className="text-(--brand) opacity-60" />
         </div>
       ) : items.length === 0 && settled && isCoach && !goal ? (
         <div className="flex flex-1 flex-col justify-end overflow-y-auto px-4 py-4">

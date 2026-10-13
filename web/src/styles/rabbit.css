@@ -194,3 +194,6 @@ html.kb-open .empty-hero { transform: none; }
   transition: grid-template-rows 0.22s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.15s ease; }
 .session-detail--open { grid-template-rows: 1fr; opacity: 1; }
 @media (prefers-reduced-motion: reduce) { .week-drawer, .week-dim, .session-detail { transition: none; } }
+
+/* Chat loading: fade in after a beat so very quick loads don't flash it. */
+.chat-loading { animation: modal-fade-in 0.2s ease-out 0.1s both; }

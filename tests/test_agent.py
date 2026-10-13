@@ -245,6 +245,15 @@ def test_proactive_turns_use_the_proactive_model(env) -> None:
     assert len(brief.calls) == 1 and len(chat.calls) == 1
 
 
+def test_proactive_keeps_only_the_final_answer(env) -> None:
+    agent, _ = env.agent([(["Let me check the activity."], [tool_block("recent_activities", {})], "tool_use"),
+                          (["Solid ride."], [], "end_turn")])
+    rec = go(agent, "friend", "note", kind="proactive")
+    assert rec["assistant"] == "Solid ride."
+    assert [p["type"] for p in rec["parts"]] == ["tool_call", "text"]
+    assert rec["parts"][-1]["text"] == "Solid ride."
+
+
 # ---------------------------------------------------------------- runner ----
 def test_runner_detaches_and_reattaches(env) -> None:
     async def go() -> None:

@@ -183,6 +183,28 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
 
   const openThread = (id: string) => { setPending(null); setThreadId(id) }
 
+  // Tapping a brief or workout-note notification opens the coach log: from a cold start
+  // via ?open=coach, or (app already running) via a message from the service worker.
+  const openCoach = useRef(new URLSearchParams(window.location.search).get('open') === 'coach')
+  useEffect(() => {
+    if (openCoach.current) window.history.replaceState(null, '', '/app/')
+    const onMsg = (e: MessageEvent) => {
+      if (e.data?.type !== 'open' || !String(e.data.url).includes('open=coach')) return
+      openCoach.current = true
+      void refreshThreads() // also picks up the new message's thread state
+    }
+    navigator.serviceWorker?.addEventListener('message', onMsg)
+    return () => navigator.serviceWorker?.removeEventListener('message', onMsg)
+  }, [refreshThreads])
+  useEffect(() => {
+    if (!openCoach.current || !coachId) return
+    openCoach.current = false
+    setPending(null)
+    setThreadId(coachId)
+    setSheet(null)
+    setClosing(false)
+  }, [coachId, threads])
+
   // First message of a draft chat: only now is the thread created on the server.
   async function sendPending(text: string, attachments: AttachmentMeta[]) {
     if (!pending) return

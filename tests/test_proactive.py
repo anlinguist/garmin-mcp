@@ -208,7 +208,8 @@ def test_push_preview_is_plain_text() -> None:
 
 def test_agent_delivery_runs_turn_and_pushes(env) -> None:
     pushes: list[tuple[str, str, str]] = []
-    push = SimpleNamespace(send=lambda u, t, b: pushes.append((u, t, b)))
+    urls: list[str] = []
+    push = SimpleNamespace(send=lambda u, t, b, url: (pushes.append((u, t, b)), urls.append(url)))
     loop = asyncio.new_event_loop()
     t = threading.Thread(target=loop.run_forever, daemon=True)
     t.start()
@@ -221,6 +222,7 @@ def test_agent_delivery_runs_turn_and_pushes(env) -> None:
         res = deliver("friend", "workout", "New activity ...")
         assert res.outcome is FireOutcome.OK
         assert pushes == [("friend", "Rabbit", "Strong tempo. Easy spin tomorrow.")]
+        assert urls == ["/app/?open=coach"]
         coach = agent.coach.coach_thread("friend")
         turn = agent.history("friend", coach["id"])[-1]
         assert turn["kind"] == "proactive" and turn["user"] is None

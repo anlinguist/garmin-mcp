@@ -256,7 +256,7 @@ class AgentDelivery:
         if self._push is not None:
             title = "Morning brief" if kind == "brief" else "Rabbit"
             try:
-                self._push.send(user_id, title, push_preview(text))
+                self._push.send(user_id, title, push_preview(text), url="/app/?open=coach")
             except Exception as e:  # the message is already in chat history
                 log_event(logger, logging.WARNING, "proactive_push_failed", user_id=user_id,
                           error=type(e).__name__)

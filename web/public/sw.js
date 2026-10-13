@@ -22,7 +22,13 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil((async () => {
     const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
     for (const w of wins) {
-      if (new URL(w.url).pathname.startsWith('/app/')) { await w.focus(); w.navigate(url); return }
+      // The app is already open (maybe in another chat): tell it where to go rather than
+      // navigating, which iOS Home Screen apps don't reliably do.
+      if (new URL(w.url).pathname.startsWith('/app/')) {
+        await w.focus()
+        w.postMessage({ type: 'open', url })
+        return
+      }
     }
     await self.clients.openWindow(url)
   })())

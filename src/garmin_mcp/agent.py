@@ -517,8 +517,18 @@ class Agent:
         user_text = text.strip()[:MESSAGE_MAX] if kind == "chat" else None
 
         def finish(status: str, error: str | None = None) -> dict[str, Any]:
+            assistant, parts = "".join(st.text).strip(), st.parts
+            if kind == "proactive":
+                # Read cold as one message: keep only the final answer, not narration
+                # ("Let me check the activity") from before the tool calls.
+                cut = max((i for i, p in enumerate(parts) if p["type"] == "tool_call"), default=-1) + 1
+                final = "".join(p["text"] for p in parts[cut:] if p["type"] == "text").strip()
+                if final:
+                    assistant = final
+                    parts = ([p for p in parts[:cut] if p["type"] != "text"]
+                             + [{"type": "text", "text": final}])
             record = {"id": turn_id, "ts": int(started), "kind": kind, "user": user_text,
-                      "assistant": "".join(st.text).strip(), "parts": st.parts}
+                      "assistant": assistant, "parts": parts}
             if label:
                 record["label"] = label
             if attachments:

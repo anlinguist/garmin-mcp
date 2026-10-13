@@ -236,6 +236,15 @@ def test_context_starts_with_user_even_after_proactive(env) -> None:
     assert backend.calls[0][2] == {"role": "user", "content": "thanks"}
 
 
+
+def test_proactive_turns_use_the_proactive_model(env) -> None:
+    chat, brief = Scripted([(["ok"], [], "end_turn")]), Scripted([(["**Rest day.**"], [], "end_turn")])
+    agent = Agent(env.service, env.store, chat, daily_token_budget=10_000, proactive_backend=brief)
+    go(agent, "friend", "brief", kind="proactive")
+    go(agent, "friend", "hi")
+    assert len(brief.calls) == 1 and len(chat.calls) == 1
+
+
 # ---------------------------------------------------------------- runner ----
 def test_runner_detaches_and_reattaches(env) -> None:
     async def go() -> None:

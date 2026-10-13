@@ -193,7 +193,10 @@ def build_chat(settings: Settings, store: AppStore, service: GarminService) -> C
                          settings.gcp_project)
     client = anthropic.AsyncAnthropic(api_key=key) if key else anthropic.AsyncAnthropic()
     backend = AnthropicBackend(client, settings.agent_model, effort=settings.agent_effort)
+    proactive_backend = AnthropicBackend(client, settings.agent_proactive_model,
+                                         effort=settings.agent_effort)
     agent = Agent(service, store, backend, daily_token_budget=settings.agent_daily_token_budget,
+                  proactive_backend=proactive_backend,
                   default_timezone=settings.poll_timezone)
     return ChatRunner(agent, max_concurrent=settings.agent_max_concurrent)
 

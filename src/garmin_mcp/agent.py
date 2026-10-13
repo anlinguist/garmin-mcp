@@ -284,6 +284,7 @@ def _clip(obj: Any, limit: int) -> Any:
 class Agent:
     def __init__(self, service: GarminService, store: AppStore, backend: ModelBackend, *,
                  daily_token_budget: int, default_timezone: str = "America/Denver",
+                 proactive_backend: ModelBackend | None = None,
                  clock: Callable[[], float] = time.time) -> None:
         if service.allow_writes:
             raise RuntimeError("Rabbit's agent must run on a read-only GarminService")
@@ -292,6 +293,9 @@ class Agent:
         self.coach = CoachStore(store, clock=clock)
         self.attachments = AttachmentStore(store, clock=clock)
         self._backend = backend
+        # Briefs and workout notes are read cold, with no chance to ask back, so they
+        # can run on a stronger model than chat.
+        self._proactive_backend = proactive_backend or backend
         self._budget = daily_token_budget
         self._tz = default_timezone
         self._clock = clock
@@ -509,6 +513,7 @@ class Agent:
         now = self._now(user_id)
         day = now.date().isoformat()
         st = _TurnState()
+        backend = self._proactive_backend if kind == "proactive" else self._backend
         user_text = text.strip()[:MESSAGE_MAX] if kind == "chat" else None
 
         def finish(status: str, error: str | None = None) -> dict[str, Any]:
@@ -531,7 +536,7 @@ class Agent:
                          "steps": len(st.tools_used)})
             emit({"type": "result", "response": response})
             log_event(logger, logging.INFO, "agent_turn", user_id=user_id, kind=kind,
-                      status=status, model=getattr(self._backend, "model", None),
+                      status=status, model=getattr(backend, "model", None),
                       tokens_in=st.tokens_in, tokens_out=st.tokens_out,
                       cache_read=st.cache_read, tools=st.tools_used,
                       ms=int((self._clock() - started) * 1000))
@@ -556,14 +561,14 @@ class Agent:
             emit({"type": "text-delta", "text": t})
 
         try:
-            return await self._loop(user_id, messages, st, emit, on_text, finish, approve)
+            return await self._loop(user_id, backend, messages, st, emit, on_text, finish, approve)
         except asyncio.CancelledError:
             if st.text:
                 st.add_text(" …(stopped)")
             finish("done")
             raise
 
-    async def _loop(self, user_id: str, messages: list[dict[str, Any]], st: _TurnState,
+    async def _loop(self, user_id: str, backend: ModelBackend, messages: list[dict[str, Any]], st: _TurnState,
                     emit: Emit, on_text: Callable[[str], Awaitable[None]],
                     finish: Callable[..., dict[str, Any]],
                     approve: Approver | None) -> dict[str, Any]:
@@ -577,7 +582,7 @@ class Agent:
                 fresh[0] = False
                 await on_text(t)
             try:
-                resp = await self._backend.turn(system=SYSTEM_PROMPT, tools=AGENT_TOOLS,
+                resp = await backend.turn(system=SYSTEM_PROMPT, tools=AGENT_TOOLS,
                                                 messages=messages, on_text=text_in)
             except Exception as e:
                 log_event(logger, logging.ERROR, "agent_model_error", user_id=user_id,

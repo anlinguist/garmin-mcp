@@ -47,17 +47,24 @@ TURN_TIMEOUT = 180.0
 WORKOUT_PROMPT = (
     "A new activity just synced from Garmin (id | sport | start | duration | distance):\n"
     "{lines}\n\n"
-    "Write a short note to the athlete about it: 2-4 sentences. Say what stood out "
-    "(pace, power, HR, effort vs. what today's planned session was for), and give one "
-    "practical note about the next day or two of their plan. Look up details or recent load/HRV with tools "
-    "if that helps. Don't open with a greeting. This will be sent as a phone notification."
+    "Write a short note to the athlete about it: 2-3 short sentences, under 60 words. Say what "
+    "stood out (pace, power, HR, effort vs. what today's planned session was for), and give one "
+    "practical note about the next day or two of their plan. Look up details or recent load/HRV "
+    "with tools if that helps. Don't open with a greeting. This will be sent as a phone notification."
 )
 BRIEF_PROMPT = (
-    "Write this morning's brief for the athlete. Start from today's planned session in the "
-    "context (a rest day is a rest day: say so, no workout). Check last night's sleep, HRV and "
-    "training readiness, and yesterday's training if any, and say whether to do today's "
-    "session as planned or ease it, and why. Under 120 words, a heading-free short paragraph or 3 bullets. "
-    "Don't open with a greeting. This will be sent as a phone notification."
+    "Write this morning's brief for the athlete. Check last night's sleep, HRV and training "
+    "readiness, and yesterday's training if any, then decide whether today's planned session "
+    "(from the context) should go as planned or be eased.\n"
+    "Format, under 50 words in total:\n"
+    "- First line: today's session in a few words, in bold, then the call. For example: "
+    "**Bike 40' easy + 25' strength.** Go as planned. On a planned rest day, say it's a rest day "
+    "and give no workout.\n"
+    "- Then 1-2 short bullets with the reason, with numbers where you have them.\n"
+    "Sleep, HRV and readiness often haven't synced from the watch this early. If they're "
+    "missing, make one bullet \"Sleep hasn't synced yet\" and base the call on the plan and "
+    "recent training; don't explain further. Don't restate the plan or open with a greeting. "
+    "This will be sent as a phone notification."
 )
 
 Deliver = Callable[[str, str, str], FireResult]  # (user_id, kind, prompt) -> result

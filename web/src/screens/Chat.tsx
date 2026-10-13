@@ -149,18 +149,27 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
     return () => ro.disconnect()
   }, [threadId, pending, items.length === 0])
 
+  // A chat or the log opens at its newest messages, placed before paint (going back to
+  // the log shows its kept rows at once, then again when its history has reloaded).
+  useLayoutEffect(() => {
+    const el = feed.current
+    if (el) { el.scrollTop = el.scrollHeight; atBottom.current = true }
+  }, [threadId, pending, ready])
+
   // An approval is waiting on you: bring it into view.
   const pendingCount = items.filter((it) => it.kind === 'approval' && it.status === 'pending').length
   useEffect(() => {
     if (pendingCount) feed.current?.scrollTo({ top: feed.current.scrollHeight, behavior: 'smooth' })
   }, [pendingCount])
 
-  // Stick to the bottom while streaming, unless the user scrolled up to read.
+  // Stick to the bottom while streaming, unless the user scrolled up to read. Long jumps
+  // are instant: iOS can leave a smooth-scrolled feed unpainted (blank) until touched.
   useEffect(() => {
     const el = feed.current
     if (!el) return
-    if (el.scrollHeight - el.scrollTop - el.clientHeight < 150 || status !== 'streaming') {
-      el.scrollTo({ top: el.scrollHeight, behavior: status === 'streaming' ? 'instant' : 'smooth' })
+    const gap = el.scrollHeight - el.scrollTop - el.clientHeight
+    if (gap < 150 || status !== 'streaming') {
+      el.scrollTo({ top: el.scrollHeight, behavior: status === 'streaming' || gap > el.clientHeight ? 'instant' : 'smooth' })
     }
   }, [items, status])
 

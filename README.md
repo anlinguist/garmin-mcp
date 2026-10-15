@@ -245,7 +245,7 @@ To enable it:
 ## Rabbit web app (optional)
 
 Rabbit is a phone-friendly coach app at `$PUBLIC_BASE_URL/app/` for people who won't set up an MCP
-connector: Google sign-in, Web Push, a Connect Garmin page, and a coach agent (Claude Haiku) with
+connector: Google sign-in, Web Push, a Connect Garmin page, and a coach agent (Claude Opus) with
 the same Garmin tools plus `training_history`. It keeps a coach's log (morning briefs, workout
 notes), separate chats by topic, the athlete's goal and plan, and a "this week" view of planned vs
 done. Access is an allowlist of Google accounts. The design notes are in `docs/plans/web-app.md`.

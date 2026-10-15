@@ -118,7 +118,7 @@ class Settings:
 
     # Rabbit coach agent (Claude API)
     anthropic_api_key_secret_name: str = ""
-    agent_model: str = "claude-haiku-5-5"
+    agent_model: str = "claude-opus-5-5"
     agent_effort: str = "low"
     agent_proactive_model: str = "claude-opus-5-5"
     agent_daily_token_budget: int = 2_000_000
@@ -227,7 +227,7 @@ class Settings:
             anthropic_api_key_secret_name=os.environ.get(
                 "ANTHROPIC_API_KEY_SECRET_NAME", "garmin-mcp-anthropic-api-key"
             ),
-            agent_model=os.environ.get("AGENT_MODEL", "claude-haiku-5-5").strip(),
+            agent_model=os.environ.get("AGENT_MODEL", "claude-opus-5-5").strip(),
             agent_effort=os.environ.get("AGENT_EFFORT", "low").strip(),
             agent_proactive_model=(os.environ.get("AGENT_PROACTIVE_MODEL", "").strip()
                                    or "claude-opus-5-5"),

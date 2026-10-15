@@ -112,7 +112,7 @@ New settings, all optional so the app is off unless configured:
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET_NAME` (Secret Manager; env fallback `GOOGLE_CLIENT_SECRET`)
 - `ALLOWED_GOOGLE_USERS=<email>:<user_id>,...`
 - `ANTHROPIC_API_KEY_SECRET_NAME` (env fallback `ANTHROPIC_API_KEY`)
-- `AGENT_MODEL=claude-haiku-5-5`, `AGENT_PROACTIVE_MODEL=claude-opus-5-5` (briefs and workout notes)
+- `AGENT_MODEL=claude-opus-5-5`, `AGENT_PROACTIVE_MODEL=claude-opus-5-5` (briefs and workout notes)
 - `AGENT_DAILY_TOKEN_BUDGET` per user (default e.g. 2M tokens)
 - `VAPID_PRIVATE_KEY_SECRET_NAME`, `VAPID_SUBJECT=mailto:...`
 - `POLL_USERS=andrew:routine,friend:app` replaces `POLL_USER_ID` (keep `POLL_USER_ID` as an alias for `<id>:routine`)

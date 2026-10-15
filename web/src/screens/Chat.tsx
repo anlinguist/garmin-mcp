@@ -16,7 +16,7 @@ import { MessageBubble } from '@/components/chat/MessageBubble'
 import { ToolCallCard, ToolCallGroup } from '@/components/chat/ToolCallCard'
 import { Button } from '@/components/ui/button'
 import {
-  createThread, deleteThread, getPlanWeek, goalCountdown, listThreads, putSettings,
+  createThread, deleteThread, getPlanWeek, goalCountdown, listThreads, putSettings, resetPlanDay,
   type Goal, type Me, type PlannedSession, type PlanWeek, type Thread, type WeekDay,
 } from '@/lib/api'
 import { useCoach, type QueuedSend, type ChartItem, type Approval, type ChatItem, type ChatMessage, type ThreadLink, type ToolCall } from '@/hooks/useCoach'
@@ -412,7 +412,8 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
 
       {showPins && goal && (
         <PlanPins goal={goal} week={week} loading={weekLoading}
-          onOpenPlan={() => open('plan')} onAskDay={askDay} />
+          onOpenPlan={() => open('plan')} onAskDay={askDay}
+          onResetDay={(date) => void resetPlanDay(date).then(setWeek, (e) => showToast((e as Error).message))} />
       )}
 
       {pending ? (

@@ -492,6 +492,21 @@ def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
             return _err(503, "Chat isn't configured on this server.")
         return JSONResponse(await planner.week(user_id))
 
+    async def plan_day_reset(request: Request, user_id: str) -> Response:
+        """Undo a day change from the week card: the plan's sessions come back."""
+        if planner is None:
+            return _err(503, "Chat isn't configured on this server.")
+        body = await read_json(request)
+        goal = _coach().active_goal(user_id)
+        if not isinstance(body, dict) or not goal:
+            return _err(400, "No plan to change.")
+        try:
+            planner.change_day(user_id, goal, str(body.get("date")), None, "",
+                               chat.agent._now(user_id).date())
+        except ValueError as e:
+            return _err(400, str(e))
+        return JSONResponse(await planner.week(user_id))
+
     # ------------------------------------------------------ goal / athlete --
     async def goals_get(request: Request, user_id: str) -> Response:
         if chat is None:
@@ -601,6 +616,7 @@ def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
         Route("/app/api/goals/{goal_id}/archive", _api(goal_archive, mutating=True),
               methods=["POST"]),
         Route("/app/api/plan/week", _api(plan_week_get, mutating=False), methods=["GET"]),
+        Route("/app/api/plan/day/reset", _api(plan_day_reset, mutating=True), methods=["POST"]),
         Route("/app/api/athlete", _api(athlete_put, mutating=True), methods=["PUT"]),
         Route("/app/api/garmin/login", _api(garmin_login, mutating=True), methods=["POST"]),
         Route("/app/api/garmin/login/{job_id}", _api(garmin_login_status, mutating=False),

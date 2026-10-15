@@ -135,6 +135,8 @@ export type DoneActivity = { id: number | null; name: string; sport: Sport; minu
 export type PlannedSession = {
   sport: Sport; title: string; minutes: number | null; detail: string
   status: 'done' | 'missed' | 'planned' | 'rest'; activity?: DoneActivity
+  /** set when the day was changed from the plan: the reason, and what the plan had */
+  changed?: string; was?: string
 }
 export type WeekDay = { date: string; weekday: string; today: boolean; sessions: PlannedSession[]; extra: DoneActivity[] }
 export type PlanWeek = {
@@ -145,3 +147,4 @@ export type PlanWeek = {
   totals: { planned_sessions: number; done_sessions: number; planned_minutes: number; done_minutes: number; extra_sessions: number }
 }
 export const getPlanWeek = () => getJSON<PlanWeek>('/api/plan/week')
+export const resetPlanDay = (date: string) => postJSON<PlanWeek>('/api/plan/day/reset', { date })

@@ -2,7 +2,7 @@
 // which expands into planned vs. done by day. Weeks follow the plan's own weeks.
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
-  Activity, Bike, Check, MessageCircle, ChevronRight, Dumbbell, Footprints, Layers, Map as MapIcon, Moon, Waves,
+  Activity, ArrowLeftRight, Bike, Check, MessageCircle, ChevronRight, Dumbbell, Footprints, Layers, Map as MapIcon, Moon, Undo2, Waves,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Goal, PlannedSession, PlanWeek, Sport, WeekDay } from '@/lib/api'
@@ -89,10 +89,11 @@ function items(day: WeekDay): Item[] {
 
 /** One day: a line per session; tapping a session opens its details and an Ask button.
  *  Only the Ask button starts a chat, so opening and closing details never does. */
-function DayRow({ day, openKey, onToggle, onAsk }: {
+function DayRow({ day, openKey, onToggle, onAsk, onReset }: {
   day: WeekDay; openKey: string | null
   onToggle: (key: string | null) => void
   onAsk: (day: WeekDay, session?: PlannedSession) => void
+  onReset: (date: string) => void
 }) {
   const date = new Date(`${day.date}T12:00:00`)
   const list = items(day)
@@ -108,7 +109,8 @@ function DayRow({ day, openKey, onToggle, onAsk }: {
           const Icon = SPORT_ICON[it.sport]
           const id = `${day.date}:${it.key}`
           const expanded = openKey === id
-          const canOpen = it.status !== 'rest'
+          const changed = it.session?.changed
+          const canOpen = it.status !== 'rest' || !!changed
           const dur = it.minutes && !hasDuration(it.title) ? fmtMinutes(it.minutes) : ''
           return (
             <span key={it.key} className="flex flex-col">
@@ -119,6 +121,7 @@ function DayRow({ day, openKey, onToggle, onAsk }: {
                 <span className={cn('min-w-0 flex-1 truncate text-[0.7647rem]', it.status === 'rest' ? 'text-muted-foreground' : 'text-foreground')}>
                   {it.title}{dur && <span className="text-muted-foreground"> · {dur}</span>}
                 </span>
+                {changed && <ArrowLeftRight className="size-3 shrink-0 text-(--accent)" aria-label="Changed from the plan" />}
                 <span className={cn('shrink-0 text-[0.6471rem]',
                   it.status === 'done' || it.status === 'extra' ? 'text-(--accent)' : it.status === 'missed' ? 'text-(--danger)' : 'text-muted-foreground')}>
                   {it.status === 'done' || it.status === 'extra' ? `✓ ${fmtMinutes(it.doneMinutes ?? 0)}` : it.status === 'missed' ? 'Missed' : ''}
@@ -129,11 +132,25 @@ function DayRow({ day, openKey, onToggle, onAsk }: {
                   <span className="min-h-0 overflow-hidden">
                     <span className="flex flex-col gap-2 pb-2 pl-5.5">
                       {it.detail && <span className="text-[0.7059rem] leading-snug text-muted-foreground">{it.detail}</span>}
-                      <button type="button" tabIndex={expanded ? 0 : -1}
-                        onClick={() => onAsk(day, it.session)}
-                        className="inline-flex w-fit items-center gap-1.5 rounded-full bg-(--accent-subtle) px-2.5 py-1 text-[0.6471rem] font-medium text-(--accent) active:opacity-70">
-                        <MessageCircle className="size-3.5" /> Ask Rabbit
-                      </button>
+                      {changed && (
+                        <span className="text-[0.7059rem] leading-snug text-(--accent)">
+                          Changed: {changed}. The plan had {it.session?.was}.
+                        </span>
+                      )}
+                      <span className="flex flex-wrap gap-2">
+                        <button type="button" tabIndex={expanded ? 0 : -1}
+                          onClick={() => onAsk(day, it.session)}
+                          className="inline-flex w-fit items-center gap-1.5 rounded-full bg-(--accent-subtle) px-2.5 py-1 text-[0.6471rem] font-medium text-(--accent) active:opacity-70">
+                          <MessageCircle className="size-3.5" /> Ask Rabbit
+                        </button>
+                        {changed && (
+                          <button type="button" tabIndex={expanded ? 0 : -1}
+                            onClick={() => onReset(day.date)}
+                            className="inline-flex w-fit items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-[0.6471rem] font-medium text-muted-foreground active:opacity-70">
+                            <Undo2 className="size-3.5" /> Back to the plan
+                          </button>
+                        )}
+                      </span>
                     </span>
                   </span>
                 </span>
@@ -146,12 +163,13 @@ function DayRow({ day, openKey, onToggle, onAsk }: {
   )
 }
 
-export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay }: {
+export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay, onResetDay = () => {} }: {
   goal: Goal
   week: PlanWeek | null
   loading: boolean
   onOpenPlan: () => void
   onAskDay: (day: WeekDay, session?: PlannedSession) => void
+  onResetDay?: (date: string) => void
 }) {
   const [open, setOpenState] = useState(false)
   const [openKey, setOpenKey] = useState<string | null>(null)
@@ -252,7 +270,8 @@ export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay }: {
             {week?.plan_status === 'over_budget' && <p className="px-2 py-1 text-[0.6471rem] text-muted-foreground">Planned sessions show up tomorrow (today's limit is used up).</p>}
             <div className="divide-y divide-(--border)">
               {week?.days.map((d) => <DayRow key={d.date} day={d} openKey={openKey} onToggle={setOpenKey}
-                onAsk={(day, session) => { setOpen(false); onAskDay(day, session) }} />)}
+                onAsk={(day, session) => { setOpen(false); onAskDay(day, session) }}
+                onReset={(date) => { setOpenKey(null); onResetDay(date) }} />)}
             </div>
           </div>
           </div>

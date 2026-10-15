@@ -56,6 +56,21 @@ GOAL_DESC = (
     "replace_current=true, but only after the athlete has explicitly confirmed the switch."
 )
 
+WEEK_DESC = (
+    "The planned sessions for this week or next, day by day, from their plan with any day "
+    "changes applied (a changed day shows the reason and what the plan had). Use it before "
+    "moving or swapping sessions, or when they ask about a day beyond today and tomorrow."
+)
+
+CHANGE_DAY_DESC = (
+    "Change one day of their plan: replace that day's planned sessions, e.g. a run instead "
+    "of the bike when their bike is broken, or a shorter session when they're short on time. "
+    "To move a session to another day, change both days (look at the week first with "
+    "week_plan). Pass sessions=[] to make it a rest day, and reset=true to put the plan's "
+    "day back. Use it when they ask for a change or agree to one you suggested; say in one "
+    "short line what you changed. Only that day changes; the plan itself stays as it is."
+)
+
 PLAN_DESC = (
     "Save your summary of the athlete's training plan on the active goal, after they upload or "
     "describe it. This summary is what you'll see in every later conversation, so make it "
@@ -189,6 +204,37 @@ AGENT_TOOLS: list[dict] = [
                 "start_date": {"type": "string", "description": "First day of week 1, YYYY-MM-DD"},
                 "weeks": {"type": "integer", "minimum": 1, "maximum": 104},
             },
+        },
+    },
+    {
+        "name": "week_plan",
+        "description": WEEK_DESC,
+        "input_schema": {
+            "type": "object",
+            "properties": {"week": {"type": "string", "enum": ["this", "next"]}},
+        },
+    },
+    {
+        "name": "change_day",
+        "description": CHANGE_DAY_DESC,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "date": {"type": "string", "description": "YYYY-MM-DD"},
+                "sessions": {"type": "array", "maxItems": 4, "items": {
+                    "type": "object",
+                    "properties": {
+                        "sport": {"type": "string", "enum": ["swim", "bike", "run", "brick", "strength", "rest", "other"]},
+                        "title": {"type": "string", "description": "Short, e.g. \"Run 40' easy\""},
+                        "minutes": {"type": ["integer", "null"]},
+                        "detail": {"type": "string", "description": "Zones, intervals, distance"},
+                    },
+                    "required": ["sport", "title"],
+                }},
+                "reason": {"type": "string", "description": "Short, shown on their week card, e.g. \"Flat tire\""},
+                "reset": {"type": "boolean", "description": "Put the plan's sessions back for this day."},
+            },
+            "required": ["date"],
         },
     },
     {

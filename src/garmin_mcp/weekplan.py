@@ -7,6 +7,10 @@ cached per (goal, week, plan version) in the user's encrypted ``weekplan`` doc, 
 runs about once a week, or again after the plan changes. It counts against the user's
 daily token budget like any turn.
 
+Day changes ("run instead of the ride today", "move the long ride to Saturday") are kept
+next to the cache, per goal and date, and laid over the planned week wherever it's used
+(week card, briefs, the agent's context). They never touch the plan itself.
+
 Done sessions are a plain Garmin read (cached like any other), matched to planned
 sessions by day and sport. Nothing here writes to Garmin.
 """
@@ -37,6 +41,8 @@ SPORTS = ("swim", "bike", "run", "brick", "strength", "rest", "other")
 MAX_PLAN_FILES_READ = 3
 KEEP_WEEKS = 6
 RETRY_AFTER_FAILURE_S = 600
+CHANGE_PAST_DAYS = 7     # how far back a day can be changed
+CHANGE_FUTURE_DAYS = 28  # and how far ahead
 
 PLANNER_PROMPT = """You turn an athlete's training plan into one week of scheduled sessions \
 for a calendar view. You get their plan (a coach's summary, and the original files when \
@@ -117,6 +123,21 @@ def _seconds(hms: Any) -> int:
     return total
 
 
+def clean_sessions(raw: Any) -> list[dict[str, Any]]:
+    """Validate model-written sessions (save_week, change_day)."""
+    out: list[dict[str, Any]] = []
+    for s in (raw if isinstance(raw, list) else [])[:4]:
+        if not isinstance(s, dict):
+            continue
+        sport = s.get("sport") if s.get("sport") in SPORTS else "other"
+        minutes = s.get("minutes")
+        if not isinstance(minutes, int) or isinstance(minutes, bool) or not 0 < minutes <= 900:
+            minutes = None
+        out.append({"sport": sport, "title": str(s.get("title") or sport.title())[:60],
+                    "minutes": minutes, "detail": str(s.get("detail") or "")[:200]})
+    return out
+
+
 def _clean_week(args: Any, start: date) -> dict[str, Any]:
     """Validate the model's save_week input; keeps only the requested week's dates."""
     days = {(start + timedelta(days=i)).isoformat(): [] for i in range(7)}
@@ -125,16 +146,7 @@ def _clean_week(args: Any, start: date) -> dict[str, Any]:
     for d in args.get("days") or []:
         if not isinstance(d, dict) or d.get("date") not in days:
             continue
-        out = days[d["date"]]
-        for s in (d.get("sessions") or [])[:4]:
-            if not isinstance(s, dict):
-                continue
-            sport = s.get("sport") if s.get("sport") in SPORTS else "other"
-            minutes = s.get("minutes")
-            if not isinstance(minutes, int) or isinstance(minutes, bool) or not 0 < minutes <= 900:
-                minutes = None
-            out.append({"sport": sport, "title": str(s.get("title") or sport.title())[:60],
-                        "minutes": minutes, "detail": str(s.get("detail") or "")[:200]})
+        days[d["date"]].extend(clean_sessions(d.get("sessions")))
     wn = args.get("week_number")
     return {"focus": str(args.get("focus") or "")[:140],
             "week_number": wn if isinstance(wn, int) and not isinstance(wn, bool) and 0 < wn < 200 else None,
@@ -198,12 +210,61 @@ class WeekPlanner:
                             goal.get("plan_start"), goal.get("plan_weeks"), goal.get("date")])
         return hashlib.sha256(basis.encode()).hexdigest()[:16]
 
-    def cached_days(self, user_id: str, goal: dict[str, Any], today: date
+    def cached_days(self, user_id: str, goal: dict[str, Any], today: date, offset: int = 0
                     ) -> tuple[dict[str, Any], dict[str, Any] | None]:
-        """(plan week, cached planned week or None). Never calls the model."""
-        pw = plan_week(goal, today)
+        """(plan week, cached planned week with day changes, or None). Never calls the model."""
+        pw = plan_week(goal, today, offset)
         key = f"{goal['id']}:{pw['start']}:{self._version(goal)}"
-        return pw, self._doc(user_id).load().get("weeks", {}).get(key)
+        doc = self._doc(user_id).load()
+        return pw, self._with_changes(doc, goal, date.fromisoformat(pw["start"]),
+                                      doc.get("weeks", {}).get(key))
+
+    # ----------------------------------------------------------- day changes --
+    @staticmethod
+    def _with_changes(doc: dict[str, Any], goal: dict[str, Any], start: date,
+                      week: dict[str, Any] | None) -> dict[str, Any] | None:
+        """The planned week with this goal's day changes laid over it. A changed day's
+        sessions carry ``changed`` (the reason) and ``was`` (what the plan had)."""
+        changes = doc.get("changes", {}).get(goal["id"], {})
+        dates = [(start + timedelta(days=i)).isoformat() for i in range(7)]
+        if not any(d in changes for d in dates):
+            return week
+        out = dict(week) if week else {"focus": "", "week_number": None,
+                                       "days": {d: [] for d in dates}}
+        out["days"] = dict(out["days"])
+        for d in dates:
+            ch = changes.get(d)
+            if not ch:
+                continue
+            was = "; ".join(s["title"] for s in (week or {}).get("days", {}).get(d, [])) or "nothing"
+            out["days"][d] = [{**s, "changed": ch.get("reason") or "Changed", "was": was}
+                              for s in ch["sessions"]] or [
+                {"sport": "rest", "title": "Rest", "minutes": None, "detail": "",
+                 "changed": ch.get("reason") or "Changed", "was": was}]
+        return out
+
+    def change_day(self, user_id: str, goal: dict[str, Any], day: str,
+                   sessions: list[dict[str, Any]] | None, reason: str, today: date) -> None:
+        """Replace one day's planned sessions (``None`` puts the plan's day back)."""
+        try:
+            d = date.fromisoformat(day)
+        except (TypeError, ValueError):
+            raise ValueError("date must be YYYY-MM-DD") from None
+        if not today - timedelta(days=CHANGE_PAST_DAYS) <= d <= today + timedelta(days=CHANGE_FUTURE_DAYS):
+            raise ValueError(f"Only days from {CHANGE_PAST_DAYS} days ago to "
+                             f"{CHANGE_FUTURE_DAYS} days ahead can be changed.")
+        oldest = (today - timedelta(days=KEEP_WEEKS * 7)).isoformat()
+
+        def put(doc: dict[str, Any]) -> None:
+            mine = doc.setdefault("changes", {}).setdefault(goal["id"], {})
+            if sessions is None:
+                mine.pop(day, None)
+            else:
+                mine[day] = {"sessions": sessions, "reason": reason.strip()[:120],
+                             "ts": int(self._clock())}
+            for k in [k for k in mine if k < oldest]:
+                del mine[k]
+        self._doc(user_id).update(put)
 
     async def ensure(self, user_id: str) -> None:
         """Make sure this week's planned sessions are cached (before a brief or workout
@@ -227,6 +288,8 @@ class WeekPlanner:
         plan_status = "none"
         if goal and goal.get("plan"):
             planned, plan_status = await self._planned(user_id, goal, start, pw)
+        if goal:
+            planned = self._with_changes(self._doc(user_id).load(), goal, start, planned)
 
         done: list[dict[str, Any]] | None = None
         garmin_error = None

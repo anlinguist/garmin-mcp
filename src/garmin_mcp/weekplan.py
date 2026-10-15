@@ -244,8 +244,10 @@ class WeekPlanner:
         return out
 
     def change_day(self, user_id: str, goal: dict[str, Any], day: str,
-                   sessions: list[dict[str, Any]] | None, reason: str, today: date) -> None:
-        """Replace one day's planned sessions (``None`` puts the plan's day back)."""
+                   sessions: list[dict[str, Any]] | None, reason: str, today: date,
+                   dry_run: bool = False) -> None:
+        """Replace one day's planned sessions (``None`` puts the plan's day back).
+        ``dry_run`` only validates."""
         try:
             d = date.fromisoformat(day)
         except (TypeError, ValueError):
@@ -253,6 +255,8 @@ class WeekPlanner:
         if not today - timedelta(days=CHANGE_PAST_DAYS) <= d <= today + timedelta(days=CHANGE_FUTURE_DAYS):
             raise ValueError(f"Only days from {CHANGE_PAST_DAYS} days ago to "
                              f"{CHANGE_FUTURE_DAYS} days ahead can be changed.")
+        if dry_run:
+            return
         oldest = (today - timedelta(days=KEEP_WEEKS * 7)).isoformat()
 
         def put(doc: dict[str, Any]) -> None:

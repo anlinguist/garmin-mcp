@@ -212,7 +212,7 @@ def test_context_says_when_plan_days_arent_loaded(env) -> None:
     assert "Today's planned sessions aren't loaded." in backend.calls[0][-1]["content"]
 
 
-def test_change_day_swaps_and_resets(env) -> None:
+def test_change_days_asks_then_swaps_and_resets(env) -> None:
     agent, backend = env.agent([])
     agent.coach.create_goal("friend", {"title": "70.3"})
     agent.coach.set_plan("friend", "plan")
@@ -220,32 +220,49 @@ def test_change_day_swaps_and_resets(env) -> None:
     start = date.fromisoformat(plan_week(agent.coach.active_goal("friend"), today)["start"])
     args = {"days": [{"date": (start + timedelta(days=i)).isoformat(), "sessions": []} for i in range(7)]}
     args["days"][(today - start).days]["sessions"] = [{"sport": "bike", "title": "Bike 40'", "minutes": 40}]
-    t = today.isoformat()
+    t, tm = today.isoformat(), (today + timedelta(days=1)).isoformat()
+    swap = {"reason": "Flat tire", "days": [
+        {"date": t, "sessions": [{"sport": "run", "title": "Run 40' easy", "minutes": 40}]},
+        {"date": tm, "sessions": [{"sport": "bike", "title": "Bike 40'", "minutes": 40}]}]}
     backend.steps = [
         ([], [tool_block("save_week", args)], "tool_use"),
-        ([], [tool_block("change_day", {"date": t, "reason": "Flat tire",
-                                        "sessions": [{"sport": "run", "title": "Run 40' easy", "minutes": 40}]})],
-         "tool_use"),
-        (["Swapped."], [], "end_turn"),
+        ([], [tool_block("change_days", swap)], "tool_use"), (["Not changed."], [], "end_turn"),
+        ([], [tool_block("change_days", swap)], "tool_use"), (["Swapped."], [], "end_turn"),
         (["Fine."], [], "end_turn"),
     ]
     asyncio.run(agent.planner.ensure("friend"))
-    go(agent, "friend", "my tire is flat, can I run?")
+    asked: list[dict] = []
+
+    def approver(ok: bool):
+        async def approve(req: dict) -> tuple[bool, str | None]:
+            asked.append(req["summary"])
+            return ok, None
+        return approve
+
+    go(agent, "friend", "my tire is flat, can I run?", approve=approver(False))
+    assert asked[0]["title"] == "Change these days?" and asked[0]["detail"] == "Flat tire"
+    assert asked[0]["changes"][0] == {"field": "Today", "from": "Bike 40'", "to": "Run 40' easy"}
+    assert asked[0]["changes"][1]["field"] == "Tomorrow"
+    goal = agent.coach.active_goal("friend")
+    assert agent.planner.cached_days("friend", goal, today)[1]["days"][t][0]["title"] == "Bike 40'"  # declined
+
+    go(agent, "friend", "ok do it", approve=approver(True))
     go(agent, "friend", "thanks")
     ctx = backend.calls[-1][-1]["content"]
     assert f"Today ({today:%A}) in their plan: Run 40' easy (40 min) (changed from the plan's Bike 40': Flat tire)." in ctx
-
     w = asyncio.run(agent.planner.week("friend"))
     day = next(d for d in w["days"] if d["today"])
-    assert day["sessions"][0]["title"] == "Run 40' easy" and day["sessions"][0]["changed"] == "Flat tire"
-    assert day["sessions"][0]["was"] == "Bike 40'"
+    assert day["sessions"][0]["changed"] == "Flat tire" and day["sessions"][0]["was"] == "Bike 40'"
 
-    # Rest day, then back to the plan; far-off dates are refused.
-    agent._dispatch("friend", "change_day", {"date": t, "sessions": [], "reason": "Sick"})
-    assert agent.planner.cached_days("friend", agent.coach.active_goal("friend"), today)[1]["days"][t][0]["sport"] == "rest"
-    agent._dispatch("friend", "change_day", {"date": t, "reset": True})
-    assert agent.planner.cached_days("friend", agent.coach.active_goal("friend"), today)[1]["days"][t][0]["title"] == "Bike 40'"
+    # Rest day, then back to the plan; far-off dates are refused before anything is saved.
+    agent._dispatch("friend", "change_days", {"days": [{"date": t, "sessions": []}], "reason": "Sick"})
+    assert agent.planner.cached_days("friend", goal, today)[1]["days"][t][0]["sport"] == "rest"
+    agent._dispatch("friend", "change_days", {"days": [{"date": t, "reset": True}]})
+    assert agent.planner.cached_days("friend", goal, today)[1]["days"][t][0]["title"] == "Bike 40'"
+    far = (today + timedelta(days=60)).isoformat()
     with pytest.raises(Exception, match="can be changed"):
-        agent._dispatch("friend", "change_day", {"date": (today + timedelta(days=60)).isoformat(), "sessions": []})
+        agent._dispatch("friend", "change_days", {"days": [{"date": t, "sessions": []},
+                                                           {"date": far, "sessions": []}]})
+    assert agent.planner.cached_days("friend", goal, today)[1]["days"][t][0]["title"] == "Bike 40'"
     view = agent._dispatch("friend", "week_plan", {})
     assert len(view["days"]) == 7 and view["today"] == t

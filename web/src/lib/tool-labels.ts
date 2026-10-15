@@ -40,9 +40,10 @@ export function toolLabel(toolName: string, params: Record<string, unknown>): st
   if (toolName === 'update_athlete_profile') return 'Noted something about you'
   if (toolName === 'save_plan') return 'Saved your plan'
   if (toolName === 'week_plan') return params.week === 'next' ? "Looked at next week's plan" : "Looked at this week's plan"
-  if (toolName === 'change_day') {
-    const d = typeof params.date === 'string' ? shortDate(params.date).replace(/[()]/g, '').trim() : ''
-    return params.reset ? `Put ${d || 'the day'} back to the plan` : `Changed ${d || 'a day'} in your plan`
+  if (toolName === 'change_days') {
+    const days = Array.isArray(params.days) ? params.days as { date?: unknown }[] : []
+    const when = days.map((d) => shortDate(d.date).replace(/[()]/g, '').trim()).filter(Boolean).join(' and ')
+    return `Changed ${when || 'days'} in your plan`
   }
   if (toolName === 'read_file') return 'Reopened your file'
   if (toolName === 'render_chart') return 'Drawing a chart'

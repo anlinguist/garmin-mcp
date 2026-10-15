@@ -76,8 +76,9 @@ it. On a planned rest day, say it's a rest day and don't suggest a workout (easy
 most). Suggest changing the plan only when their data gives a reason, and say what it is. If \
 today's sessions aren't listed, check the plan (read_file) before prescribing a workout.
 - When they can't do a session (broken bike, travel, short on time, feeling off) or want to \
-move one, suggest a swap that keeps the week's intent, and save it with change_day once they \
-ask for it or agree. Check the week with week_plan before moving sessions between days.
+move one, propose a swap that keeps the week's intent with change_days (they approve it in \
+the app). Check the week with week_plan first, and don't stack a moved session onto a day \
+that's already full; swap or trim instead.
 - Keep memory current: save_goal for race details, save_plan for their training plan, \
 update_athlete_profile for stable facts about the athlete, update_notes for what you learn \
 during this block. Only save what they told you or confirmed, and say in one short line what \
@@ -467,7 +468,7 @@ class Agent:
             return {"ok": True, "plan_chars": len(goal["plan"]),
                     "start_date": goal.get("plan_start"), "weeks": goal.get("plan_weeks"),
                     "files": [f["name"] for f in goal.get("plan_files", [])]}
-        if name in ("week_plan", "change_day"):
+        if name in ("week_plan", "change_days"):
             return self._plan_tool(user_id, name, args)
         raise GarminError(f"Unknown tool {name!r}.")
 
@@ -476,18 +477,19 @@ class Agent:
         if not goal:
             raise GarminError("No active goal yet, so there's no plan to look at or change.")
         today = self._now(user_id).date()
-        if name == "change_day":
-            reset = args.get("reset") is True
-            sessions = None if reset else clean_sessions(args.get("sessions"))
-            if not reset and not isinstance(args.get("sessions"), list):
-                raise GarminError("Pass sessions (a list; [] for a rest day) or reset=true.")
+        if name == "change_days":
+            plan = self._day_changes(args)
+            reason = str(args.get("reason") or "")
             try:
-                self.planner.change_day(user_id, goal, str(args.get("date")), sessions,
-                                        str(args.get("reason") or ""), today)
+                for day, sessions in plan:  # validate every date before saving any
+                    self.planner.change_day(user_id, goal, day, sessions, reason, today, dry_run=True)
+                for day, sessions in plan:
+                    self.planner.change_day(user_id, goal, day, sessions, reason, today)
             except ValueError as e:
                 raise GarminError(str(e)) from None
-            return {"ok": True, "date": args.get("date"), "reset": reset,
-                    "sessions": sessions if sessions is not None else "plan's sessions restored"}
+            return {"ok": True, "changed": [
+                {"date": d, "sessions": ss if ss is not None else "plan's sessions restored"}
+                for d, ss in plan]}
         offset = 1 if args.get("week") == "next" else 0
         pw, week = self.planner.cached_days(user_id, goal, today, offset)
         if week is None:
@@ -498,6 +500,24 @@ class Agent:
                           "sessions": [{k: v for k, v in s.items() if v not in (None, "")}
                                        for s in ss]}
                          for d, ss in sorted(week["days"].items())]}
+
+    @staticmethod
+    def _day_changes(args: dict[str, Any]) -> list[tuple[str, list[dict[str, Any]] | None]]:
+        """change_days input as [(date, sessions or None for 'back to the plan')]."""
+        days = args.get("days")
+        if not isinstance(days, list) or not days or len(days) > 7:
+            raise GarminError("days must be a list of 1 to 7 days.")
+        out: list[tuple[str, list[dict[str, Any]] | None]] = []
+        for d in days:
+            if not isinstance(d, dict):
+                raise GarminError("Each day must be an object with a date.")
+            if d.get("reset") is True:
+                out.append((str(d.get("date")), None))
+            elif isinstance(d.get("sessions"), list):
+                out.append((str(d.get("date")), clean_sessions(d["sessions"])))
+            else:
+                raise GarminError("Each day needs sessions (a list; [] for rest) or reset=true.")
+        return out
 
     # ------------------------------------------------------------ approval --
     def approval_needed(self, user_id: str, name: str, args: Any) -> dict[str, Any] | None:
@@ -519,6 +539,28 @@ class Agent:
             changes = [{"field": _FIELD_LABELS[k], "from": _snip(g.get(k)) or None, "to": _snip(args[k])}
                        for k in _GOAL_FIELDS if k in args and str(args[k] or "") != str(g.get(k) or "")]
             return {"title": "Update your goal?", "changes": changes} if changes else None
+        if name == "change_days":
+            try:
+                plan = self._day_changes(args)
+            except GarminError:
+                return None  # dispatch reports the bad input
+            today = self._now(user_id).date()
+            changes = []
+            for day, sessions in plan:
+                try:
+                    d = date.fromisoformat(day)
+                except ValueError:
+                    return None
+                _, week = self.planner.cached_days(user_id, g, d)
+                now = (week or {}).get("days", {}).get(day, [])
+                label = "Today" if d == today else "Tomorrow" if d == today + timedelta(days=1) else f"{d:%a %b} {d.day}"
+                to = ("Back to the plan" if sessions is None
+                      else "; ".join(s["title"] for s in sessions) or "Rest")
+                changes.append({"field": label, "from": "; ".join(s["title"] for s in now) or "Nothing",
+                                "to": to})
+            reason = _snip(args.get("reason"), 120)
+            return {"title": "Change your plan?" if len(changes) == 1 else "Change these days?",
+                    **({"detail": reason} if reason else {}), "changes": changes}
         if name == "save_plan" and g.get("plan"):
             changes = []
             if args.get("summary") and args["summary"] != g["plan"]:

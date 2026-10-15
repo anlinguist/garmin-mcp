@@ -62,13 +62,14 @@ WEEK_DESC = (
     "moving or swapping sessions, or when they ask about a day beyond today and tomorrow."
 )
 
-CHANGE_DAY_DESC = (
-    "Change one day of their plan: replace that day's planned sessions, e.g. a run instead "
-    "of the bike when their bike is broken, or a shorter session when they're short on time. "
-    "To move a session to another day, change both days (look at the week first with "
-    "week_plan). Pass sessions=[] to make it a rest day, and reset=true to put the plan's "
-    "day back. Use it when they ask for a change or agree to one you suggested; say in one "
-    "short line what you changed. Only that day changes; the plan itself stays as it is."
+CHANGE_DAYS_DESC = (
+    "Change days of their plan in one go: replace each day's planned sessions, e.g. a run "
+    "instead of the bike when their bike is broken, or a shorter session when they're short "
+    "on time. A move or swap between days is one call with both days (look at the week first "
+    "with week_plan). sessions=[] makes a rest day; reset=true puts the plan's day back. The "
+    "athlete approves the change in the app before it's saved, so call it with your proposal "
+    "rather than asking first in text; afterwards say in one short line what changed. Only "
+    "those days change; the plan itself stays as it is."
 )
 
 PLAN_DESC = (
@@ -108,6 +109,18 @@ CHART_DESC = (
     "athlete's preferred units first. Keep labels short (e.g. 'Oct 6', 'Wk 3'). After calling "
     "it, add a sentence or two on what the chart shows, but don't repeat every number."
 )
+
+_SESSION = {
+    "type": "object",
+    "properties": {
+        "sport": {"type": "string",
+                  "enum": ["swim", "bike", "run", "brick", "strength", "rest", "other"]},
+        "title": {"type": "string", "description": "Short, e.g. \"Run 40' easy\""},
+        "minutes": {"type": ["integer", "null"]},
+        "detail": {"type": "string", "description": "Zones, intervals, distance"},
+    },
+    "required": ["sport", "title"],
+}
 
 AGENT_TOOLS: list[dict] = [
     {
@@ -215,26 +228,25 @@ AGENT_TOOLS: list[dict] = [
         },
     },
     {
-        "name": "change_day",
-        "description": CHANGE_DAY_DESC,
+        "name": "change_days",
+        "description": CHANGE_DAYS_DESC,
         "input_schema": {
             "type": "object",
             "properties": {
-                "date": {"type": "string", "description": "YYYY-MM-DD"},
-                "sessions": {"type": "array", "maxItems": 4, "items": {
+                "days": {"type": "array", "minItems": 1, "maxItems": 7, "items": {
                     "type": "object",
                     "properties": {
-                        "sport": {"type": "string", "enum": ["swim", "bike", "run", "brick", "strength", "rest", "other"]},
-                        "title": {"type": "string", "description": "Short, e.g. \"Run 40' easy\""},
-                        "minutes": {"type": ["integer", "null"]},
-                        "detail": {"type": "string", "description": "Zones, intervals, distance"},
+                        "date": {"type": "string", "description": "YYYY-MM-DD"},
+                        "sessions": {"type": "array", "maxItems": 4, "items": _SESSION},
+                        "reset": {"type": "boolean",
+                                  "description": "Put the plan's sessions back for this day."},
                     },
-                    "required": ["sport", "title"],
+                    "required": ["date"],
                 }},
-                "reason": {"type": "string", "description": "Short, shown on their week card, e.g. \"Flat tire\""},
-                "reset": {"type": "boolean", "description": "Put the plan's sessions back for this day."},
+                "reason": {"type": "string",
+                           "description": "Short, shown on their week card, e.g. \"Flat tire\""},
             },
-            "required": ["date"],
+            "required": ["days"],
         },
     },
     {

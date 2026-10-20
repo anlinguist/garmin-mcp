@@ -141,10 +141,14 @@ export type PlannedSession = {
 export type WeekDay = { date: string; weekday: string; today: boolean; sessions: PlannedSession[]; extra: DoneActivity[] }
 export type PlanWeek = {
   start: string; end: string; today: string
+  /** weeks from this week (clamped by the server), and whether there are more each way */
+  offset: number; prev: boolean; next: boolean
   index: number | null; weeks: number | null; weeks_to_race: number | null; phase: string | null
   plan_status: 'none' | 'ready' | 'error' | 'over_budget'; focus: string | null
   garmin_error: string | null; days: WeekDay[]
   totals: { planned_sessions: number; done_sessions: number; planned_minutes: number; done_minutes: number; extra_sessions: number }
 }
-export const getPlanWeek = () => getJSON<PlanWeek>('/api/plan/week')
-export const resetPlanDay = (date: string) => postJSON<PlanWeek>('/api/plan/day/reset', { date })
+export const getPlanWeek = (offset = 0) =>
+  getJSON<PlanWeek>(offset ? `/api/plan/week?offset=${offset}` : '/api/plan/week')
+export const resetPlanDay = (date: string, offset = 0) =>
+  postJSON<PlanWeek>('/api/plan/day/reset', { date, offset })

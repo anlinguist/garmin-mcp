@@ -413,7 +413,10 @@ export function Chat({ me, onChange }: { me: Me; onChange: () => void }) {
       {showPins && goal && (
         <PlanPins goal={goal} week={week} loading={weekLoading}
           onOpenPlan={() => open('plan')} onAskDay={askDay}
-          onResetDay={(date) => void resetPlanDay(date).then(setWeek, (e) => showToast((e as Error).message))} />
+          onResetDay={(date, offset) => resetPlanDay(date, offset).then((w) => {
+            if (offset === 0) setWeek(w)
+            return w
+          }, (e) => { showToast((e as Error).message) })} />
       )}
 
       {pending ? (

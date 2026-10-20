@@ -1,11 +1,13 @@
 // Pinned to the top of the coach log: the plan (tap to open it) and "This week",
 // which expands into planned vs. done by day. Weeks follow the plan's own weeks.
+// With the card open, swiping sideways goes to earlier or later weeks.
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import {
-  Activity, ArrowLeftRight, Bike, Check, MessageCircle, ChevronRight, Dumbbell, Footprints, Layers, Map as MapIcon, Moon, Undo2, Waves,
+  Activity, ArrowLeftRight, Bike, Check, MessageCircle, ChevronRight, Dumbbell, Footprints, Layers, Map as MapIcon, Moon, RotateCcw, Undo2, Waves,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { Goal, PlannedSession, PlanWeek, Sport, WeekDay } from '@/lib/api'
+import { getPlanWeek, type Goal, type PlannedSession, type PlanWeek, type Sport, type WeekDay } from '@/lib/api'
 
 const SPORT_ICON: Record<Sport, typeof Bike> = {
   swim: Waves, bike: Bike, run: Footprints, brick: Layers, strength: Dumbbell, rest: Moon, other: Activity,
@@ -163,16 +165,43 @@ function DayRow({ day, openKey, onToggle, onAsk, onReset }: {
   )
 }
 
-export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay, onResetDay = () => {} }: {
+/** "Next week", "3 weeks ago" (for weeks the plan doesn't number). */
+function relWeek(offset: number): string {
+  if (offset === 0) return 'This week'
+  if (offset === 1) return 'Next week'
+  if (offset === -1) return 'Last week'
+  return offset > 0 ? `In ${offset} weeks` : `${-offset} weeks ago`
+}
+
+const SWIPE_MIN = 60 // px, or a quick flick
+
+export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay, onResetDay }: {
   goal: Goal
   week: PlanWeek | null
   loading: boolean
   onOpenPlan: () => void
   onAskDay: (day: WeekDay, session?: PlannedSession) => void
-  onResetDay?: (date: string) => void
+  /** undo a day change; resolves with that week as it is now */
+  onResetDay?: (date: string, offset: number) => Promise<PlanWeek | void>
 }) {
   const [open, setOpenState] = useState(false)
   const [openKey, setOpenKey] = useState<string | null>(null)
+  // Other weeks, fetched as the card is swiped to them. This week comes from the parent;
+  // when it reloads (a day changed in chat, a new plan) the others may be stale too.
+  const [offset, setOffset] = useState(0)
+  const [others, setOthers] = useState<Record<number, PlanWeek>>({})
+  const [othersLoading, setOthersLoading] = useState(false)
+  useEffect(() => { setOthers({}) }, [week])
+  useEffect(() => {
+    if (offset === 0 || others[offset]) return
+    let live = true
+    setOthersLoading(true)
+    getPlanWeek(offset).then((w) => { if (live) setOthers((o) => ({ ...o, [offset]: w })) }, () => {})
+      .finally(() => { if (live) setOthersLoading(false) })
+    return () => { live = false }
+  }, [offset, others])
+  const shown = offset === 0 ? week : others[offset] ?? null
+  const shownLoading = offset === 0 ? loading : othersLoading
   // The drawer may use all the room below the card (down to the safe area).
   const cardRef = useRef<HTMLDivElement>(null)
   const [room, setRoom] = useState<number | null>(null)
@@ -201,19 +230,102 @@ export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay, onResetDay
       const bottom = headRef.current?.getBoundingClientRect().bottom
       if (bottom != null) setRoom(Math.max(200, (window.visualViewport?.height ?? window.innerHeight) - bottom - 16))
     }
-    else lowerTimer.current = window.setTimeout(() => setRaised(false), 340)
+    else lowerTimer.current = window.setTimeout(() => {
+      setRaised(false)
+      setOffset(0) // closed, the card is always this week
+      setOpenKey(null)
+    }, 340)
     setOpenState(v)
   }
+
+  // Sideways swipe on the open card: the week's dots and days follow the finger, then
+  // slide out and the next week slides in from the other side.
+  const headSlide = useRef<HTMLSpanElement>(null)
+  const daysSlide = useRef<HTMLDivElement>(null)
+  const scroller = useRef<HTMLDivElement>(null)
+  const swiped = useRef(false) // a swipe that ends on the header isn't a tap
+  const can = useRef({ prev: false, next: false })
+  can.current = { prev: !!shown?.prev, next: !!shown?.next }
+  const go = (dir: 1 | -1, from = 0) => {
+    const els = [headSlide.current, daysSlide.current].filter(Boolean) as HTMLElement[]
+    const w = cardRef.current?.offsetWidth ?? 320
+    const ease = 'cubic-bezier(0.2, 0.8, 0.2, 1)'
+    const out = els.map((el) => el.animate(
+      [{ transform: `translateX(${from}px)`, opacity: 1 }, { transform: `translateX(${-dir * w * 0.6}px)`, opacity: 0 }],
+      { duration: 150, easing: 'ease-in', fill: 'forwards' }))
+    void Promise.all(out.map((a) => a.finished)).then(() => {
+      flushSync(() => { setOffset((o) => o + dir); setOpenKey(null) })
+      if (scroller.current) scroller.current.scrollTop = 0
+      els.forEach((el) => { el.style.transform = '' })
+      out.forEach((a) => a.cancel())
+      els.forEach((el) => el.animate(
+        [{ transform: `translateX(${dir * w * 0.6}px)`, opacity: 0 }, { transform: 'translateX(0)', opacity: 1 }],
+        { duration: 220, easing: ease }))
+    }, () => {})
+  }
+  const goRef = useRef(go)
+  goRef.current = go
+  useEffect(() => {
+    const card = cardRef.current
+    if (!card || !open) return
+    let x0 = 0, y0 = 0, t0 = 0, dx = 0, mode: 'none' | 'x' | 'y' = 'none'
+    const els = () => [headSlide.current, daysSlide.current].filter(Boolean) as HTMLElement[]
+    const start = (e: TouchEvent) => {
+      if (e.touches.length !== 1) { mode = 'y'; return }
+      x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; t0 = e.timeStamp; dx = 0; mode = 'none'
+    }
+    const move = (e: TouchEvent) => {
+      if (mode === 'y') return
+      const mx = e.touches[0].clientX - x0
+      const my = e.touches[0].clientY - y0
+      if (mode === 'none') {
+        if (Math.abs(mx) < 10 && Math.abs(my) < 10) return
+        mode = Math.abs(mx) > Math.abs(my) * 1.2 ? 'x' : 'y'
+        if (mode === 'y') return
+      }
+      e.preventDefault() // no vertical scroll while swiping sideways
+      const ok = mx < 0 ? can.current.next : can.current.prev
+      dx = ok ? mx : mx / 4 // resist where there are no more weeks
+      els().forEach((el) => { el.style.transform = `translateX(${dx}px)` })
+    }
+    const end = (e: TouchEvent) => {
+      if (mode !== 'x') return
+      mode = 'none'
+      swiped.current = true
+      window.setTimeout(() => { swiped.current = false }, 50)
+      const dir = dx < 0 ? 1 : -1
+      const fast = Math.abs(dx) / Math.max(1, e.timeStamp - t0) > 0.4
+      if ((Math.abs(dx) > SWIPE_MIN || fast) && (dir === 1 ? can.current.next : can.current.prev)) {
+        goRef.current(dir, dx)
+      } else {
+        els().forEach((el) => {
+          el.animate([{ transform: `translateX(${dx}px)` }, { transform: 'translateX(0)' }],
+            { duration: 180, easing: 'ease-out' })
+          el.style.transform = ''
+        })
+      }
+    }
+    card.addEventListener('touchstart', start, { passive: true })
+    card.addEventListener('touchmove', move, { passive: false })
+    card.addEventListener('touchend', end)
+    card.addEventListener('touchcancel', end)
+    return () => {
+      card.removeEventListener('touchstart', start)
+      card.removeEventListener('touchmove', move)
+      card.removeEventListener('touchend', end)
+      card.removeEventListener('touchcancel', end)
+    }
+  }, [open])
   useEffect(() => () => {
     if (lowerTimer.current) window.clearTimeout(lowerTimer.current)
   }, [])
   const hasPlan = !!goal.plan
-  const reading = loading && hasPlan && !week
+  const reading = shownLoading && hasPlan && !shown
 
   // One line: where you are in the plan and which days (falls back to "This week").
-  const where = week?.index && week.index > 0
-    ? `Week ${week.index}${week.weeks ? ` of ${week.weeks}` : ''}${week.phase && week.phase !== 'post-race' ? ` · ${cap(week.phase)}` : ''}`
-    : 'This week'
+  const where = shown?.index && shown.index > 0
+    ? `Week ${shown.index}${shown.weeks ? ` of ${shown.weeks}` : ''}${shown.phase && shown.phase !== 'post-race' ? ` · ${cap(shown.phase)}` : ''}`
+    : relWeek(offset)
 
   return (
     <>
@@ -223,18 +335,18 @@ export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay, onResetDay
       <div className={cn('relative mx-auto max-w-2xl', raised && 'z-[46]')} style={headH ? { height: headH } : undefined}>
       <div ref={cardRef} className={cn('overflow-hidden rounded-xl border border-border bg-(--bg-surface) transition-shadow duration-300',
         headH && 'absolute inset-x-0 top-0', raised ? 'shadow-lg' : 'shadow-sm')}>
-        <button ref={headRef} onClick={() => setOpen((v) => !v)} aria-expanded={open}
+        <button ref={headRef} onClick={() => { if (!swiped.current) setOpen((v) => !v) }} aria-expanded={open}
           className="flex w-full items-center gap-2 px-3 pb-2 pt-2 text-left">
-          <span className="min-w-0 flex-1">
+          <span ref={headSlide} className="min-w-0 flex-1">
             <span className="flex items-baseline gap-2">
               <span className="truncate text-[0.5882rem] font-semibold uppercase tracking-widest text-muted-foreground">
-                {where}{week ? ` · ${fmtRange(week.start, week.end)}` : ''}
+                {where}{shown ? ` · ${fmtRange(shown.start, shown.end)}` : ''}
               </span>
               {reading && <span className="ml-auto shrink-0 text-[0.6471rem] text-muted-foreground">Reading your plan…</span>}
             </span>
-            {week ? (
+            {shown ? (
               <span className="mt-1.5 flex justify-between px-1">
-                {week.days.map((d) => <DayDot key={d.date} day={d} />)}
+                {shown.days.map((d) => <DayDot key={d.date} day={d} />)}
               </span>
             ) : (
               <span className="mt-1.5 flex justify-between px-1">
@@ -250,7 +362,7 @@ export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay, onResetDay
         </button>
         <div className={cn('week-drawer', open && 'week-drawer--open')} aria-hidden={!open} inert={!open}>
           <div className="min-h-0 overflow-hidden">
-          <div className="overflow-y-auto overscroll-contain border-t border-(--border) pb-1"
+          <div ref={scroller} className="overflow-y-auto overscroll-contain border-t border-(--border) pb-1"
             style={{ maxHeight: room ? `calc(${room}px - env(safe-area-inset-bottom))` : '52vh' }}>
             <button onClick={() => { setOpen(false); onOpenPlan() }}
               className="flex w-full items-center gap-3 border-b border-(--border) px-3 py-2.5 text-left active:bg-(--bg-inset)">
@@ -260,18 +372,38 @@ export function PlanPins({ goal, week, loading, onOpenPlan, onAskDay, onResetDay
               <span className="min-w-0 flex-1">
                 <span className="block text-[0.8235rem] font-medium text-foreground">{hasPlan ? 'Your plan' : 'Add your plan'}</span>
                 <span className="block truncate text-[0.6471rem] text-muted-foreground">
-                  {hasPlan ? (week?.focus?.replace(/\s*\([^)]*\)\s*$/, '') || goal.title) : 'Upload it or tell Rabbit about it'}
+                  {hasPlan ? (shown?.focus?.replace(/\s*\([^)]*\)\s*$/, '') || goal.title) : 'Upload it or tell Rabbit about it'}
                 </span>
               </span>
               <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
             </button>
-            {week?.garmin_error && <p className="px-2 py-1 text-[0.6471rem] text-(--warning)">{week.garmin_error}</p>}
-            {week?.plan_status === 'error' && <p className="px-2 py-1 text-[0.6471rem] text-muted-foreground">Couldn't read this week from your plan. Showing what you've done.</p>}
-            {week?.plan_status === 'over_budget' && <p className="px-2 py-1 text-[0.6471rem] text-muted-foreground">Planned sessions show up tomorrow (today's limit is used up).</p>}
+            <div ref={daysSlide}>
+            {/* Swiping is touch-only; these do the same for keyboards and screen readers. */}
+            {shown?.prev && <button type="button" onClick={() => go(-1)} className="sr-only">Previous week</button>}
+            {shown?.next && <button type="button" onClick={() => go(1)} className="sr-only">Next week</button>}
+            {offset !== 0 && (
+              <div className="flex justify-center pt-2">
+                <button type="button" onClick={() => setOffset(0)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-[0.6471rem] font-medium text-muted-foreground active:opacity-70">
+                  <RotateCcw className="size-3" /> Back to this week
+                </button>
+              </div>
+            )}
+            {shown?.garmin_error && <p className="px-2 py-1 text-[0.6471rem] text-(--warning)">{shown.garmin_error}</p>}
+            {shown?.plan_status === 'error' && <p className="px-2 py-1 text-[0.6471rem] text-muted-foreground">Couldn't read this week from your plan.{shown.start <= shown.today ? " Showing what you've done." : ''}</p>}
+            {shown?.plan_status === 'over_budget' && <p className="px-2 py-1 text-[0.6471rem] text-muted-foreground">Planned sessions show up tomorrow (today's limit is used up).</p>}
+            {!shown && reading && <p className="px-2 py-3 text-center text-[0.6471rem] text-muted-foreground">Reading your plan…</p>}
             <div className="divide-y divide-(--border)">
-              {week?.days.map((d) => <DayRow key={d.date} day={d} openKey={openKey} onToggle={setOpenKey}
+              {shown?.days.map((d) => <DayRow key={d.date} day={d} openKey={openKey} onToggle={setOpenKey}
                 onAsk={(day, session) => { setOpen(false); onAskDay(day, session) }}
-                onReset={(date) => { setOpenKey(null); onResetDay(date) }} />)}
+                onReset={(date) => {
+                  setOpenKey(null)
+                  const at = offset
+                  void onResetDay?.(date, at).then((w) => {
+                    if (w && at !== 0) setOthers((o) => ({ ...o, [at]: w }))
+                  })
+                }} />)}
+            </div>
             </div>
           </div>
           </div>

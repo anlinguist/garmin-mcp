@@ -490,7 +490,11 @@ def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
     async def plan_week_get(request: Request, user_id: str) -> Response:
         if planner is None:
             return _err(503, "Chat isn't configured on this server.")
-        return JSONResponse(await planner.week(user_id))
+        try:
+            offset = int(request.query_params.get("offset", "0"))
+        except ValueError:
+            return _err(400, "offset must be a whole number of weeks")
+        return JSONResponse(await planner.week(user_id, offset))
 
     async def plan_day_reset(request: Request, user_id: str) -> Response:
         """Undo a day change from the week card: the plan's sessions come back."""
@@ -505,7 +509,9 @@ def build_app_routes(settings: Settings, auth: WebAuth, token_store: TokenStore,
                                chat.agent._now(user_id).date())
         except ValueError as e:
             return _err(400, str(e))
-        return JSONResponse(await planner.week(user_id))
+        offset = body.get("offset", 0)
+        return JSONResponse(await planner.week(
+            user_id, offset if isinstance(offset, int) and not isinstance(offset, bool) else 0))
 
     # ------------------------------------------------------ goal / athlete --
     async def goals_get(request: Request, user_id: str) -> Response:

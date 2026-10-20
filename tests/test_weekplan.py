@@ -144,6 +144,38 @@ def test_week_endpoint_caches_and_counts_budget(env, tmp_path) -> None:
     assert w["plan_status"] == "error" and all(not d["sessions"] for d in w["days"])
 
 
+def test_week_card_browses_back_and_ahead_within_the_plan(env, tmp_path) -> None:
+    agent, backend = env.agent([])
+    today = agent._now("friend").date()
+    monday = today - timedelta(days=today.weekday())
+    race = monday + timedelta(weeks=5, days=5)  # a Saturday, 5 weeks after this week
+    agent.coach.create_goal("friend", {"title": "70.3", "date": race.isoformat()})
+    agent.coach.set_plan("friend", "plan")
+    agent.coach.set_plan("friend", None, start_date=(monday - timedelta(weeks=2)).isoformat(), weeks=8)
+    goal = agent.coach.active_goal("friend")
+    assert WeekPlanner.offsets(goal, today) == (2, 5)  # week 3 of the plan; race week is 5 ahead
+    nxt = monday + timedelta(weeks=1)
+    backend.steps = [([], [tool_block("save_week", _week_args(nxt))], "tool_use")]
+    settings = Settings(public_base_url=BASE, data_dir=tmp_path, app_enabled=True, mcp_enabled=False)
+    auth = WebAuth(settings, env.store, "", dev_user="friend")
+    app = Starlette(routes=build_app_routes(settings, auth, env.tokens, None, None, ChatRunner(agent)))
+
+    async def go_() -> None:
+        async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url=BASE) as c:
+            w = (await c.get("/app/api/plan/week?offset=1")).json()
+            assert (w["start"], w["index"], w["offset"], w["prev"], w["next"]) == (
+                nxt.isoformat(), 4, 1, True, True)
+            assert w["plan_status"] == "ready" and w["garmin_error"] is None
+            assert all(s["status"] == "planned" for d in w["days"] for s in d["sessions"])
+            first = (await c.get("/app/api/plan/week?offset=-10")).json()  # clamped to week 1
+            assert (first["index"], first["offset"], first["prev"]) == (1, -2, False)
+            last = (await c.get("/app/api/plan/week?offset=99")).json()  # clamped to race week
+            assert (last["index"], last["offset"], last["next"], last["phase"]) == (8, 5, False, "race week")
+            assert (await c.get("/app/api/plan/week?offset=x")).status_code == 400
+    asyncio.run(go_())
+    assert "Week to fill in: " + f"{nxt:%A %Y-%m-%d}" in backend.calls[0][0]["content"][-1]["text"]
+
+
 def test_week_without_plan_or_garmin(env) -> None:
     agent, backend = env.agent([])
     w = asyncio.run(WeekPlanner(agent).week("andrew"))  # no goal, Garmin not connected

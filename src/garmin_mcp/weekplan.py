@@ -39,7 +39,8 @@ logger = logging.getLogger(__name__)
 
 SPORTS = ("swim", "bike", "run", "brick", "strength", "rest", "other")
 MAX_PLAN_FILES_READ = 3
-KEEP_WEEKS = 6
+KEEP_WEEKS = 30         # planned weeks cached (browsing back and ahead fills more)
+BROWSE_WEEKS = 12       # the week card goes this many weeks back and ahead
 RETRY_AFTER_FAILURE_S = 600
 CHANGE_PAST_DAYS = 7     # how far back a day can be changed
 CHANGE_FUTURE_DAYS = 28  # and how far ahead
@@ -257,7 +258,7 @@ class WeekPlanner:
                              f"{CHANGE_FUTURE_DAYS} days ahead can be changed.")
         if dry_run:
             return
-        oldest = (today - timedelta(days=KEEP_WEEKS * 7)).isoformat()
+        oldest = (today - timedelta(days=(BROWSE_WEEKS + 1) * 7)).isoformat()
 
         def put(doc: dict[str, Any]) -> None:
             mine = doc.setdefault("changes", {}).setdefault(goal["id"], {})
@@ -279,12 +280,32 @@ class WeekPlanner:
             pw = plan_week(goal, today)
             await self._planned(user_id, goal, date.fromisoformat(pw["start"]), pw)
 
-    async def week(self, user_id: str) -> dict[str, Any]:
+    @staticmethod
+    def offsets(goal: dict[str, Any] | None, today: date) -> tuple[int, int]:
+        """How far back and ahead the week card goes: BROWSE_WEEKS, and not before the
+        plan's first week or past race week when those are known."""
+        back = ahead = BROWSE_WEEKS
+        pw = plan_week(goal, today)
+        if pw["index"]:
+            back = max(0, min(back, pw["index"] - 1))
+        race = (goal or {}).get("date")
+        if race:
+            try:
+                last = plan_week(goal, date.fromisoformat(race))
+                ahead = max(0, min(ahead, (date.fromisoformat(last["start"])
+                                           - date.fromisoformat(pw["start"])).days // 7))
+            except ValueError:
+                pass
+        return back, ahead
+
+    async def week(self, user_id: str, offset: int = 0) -> dict[str, Any]:
         agent = self._agent
         now = agent._now(user_id)
         today = now.date()
         goal = agent.coach.active_goal(user_id)
-        pw = plan_week(goal, today)
+        back, ahead = self.offsets(goal, today)
+        offset = max(-back, min(ahead, offset))
+        pw = plan_week(goal, today, offset)
         start = date.fromisoformat(pw["start"])
         end = start + timedelta(days=6)
 
@@ -298,8 +319,9 @@ class WeekPlanner:
         done: list[dict[str, Any]] | None = None
         garmin_error = None
         try:
-            done = await anyio.to_thread.run_sync(
-                agent._service.activities_between, user_id, start, min(end, today))
+            if start <= today:  # a future week has nothing done yet
+                done = await anyio.to_thread.run_sync(
+                    agent._service.activities_between, user_id, start, min(end, today))
         except ReauthRequired:
             garmin_error = "Reconnect Garmin in settings to see what you've done."
         except GarminError as e:
@@ -311,9 +333,12 @@ class WeekPlanner:
         index = pw["index"] or (planned or {}).get("week_number")
         weeks_to_race = phase = None
         if goal and goal.get("date"):
-            weeks_to_race, phase = training_phase(date.fromisoformat(goal["date"]), today)
+            # Another week's phase is the one it falls in (its first day, or today).
+            weeks_to_race, phase = training_phase(date.fromisoformat(goal["date"]),
+                                                  today if offset == 0 else start)
         return {
             "start": pw["start"], "end": pw["end"], "today": today.isoformat(),
+            "offset": offset, "prev": offset > -back, "next": offset < ahead,
             "index": index, "weeks": pw["weeks"], "weeks_to_race": weeks_to_race, "phase": phase,
             "plan_status": plan_status, "focus": (planned or {}).get("focus") or None,
             "garmin_error": garmin_error, "days": days,

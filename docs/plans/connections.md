@@ -16,8 +16,6 @@ Read-only, and limited to what Garmin's own privacy settings expose to him.
 - Social writes: follow/unfollow, accept requests, likes, comments, kudos.
 - Anyone who isn't a current connection (public profiles, followers-only,
   pending requests, search for users).
-- Rabbit. Its agent shares `GarminService.execute`, so these methods would show
-  up there too; v1 keeps them off in `rabbit.service` (see Gating).
 - New MCP tools. The surface stays `search`, `execute`, `recent_activities`.
 - Wellness data (sleep, HRV, body battery) for connections. The web app doesn't
   request it for a connection's profile, and the one daily-summary call returned
@@ -123,9 +121,12 @@ gains `friend`/`friends`/`buddy` → `connection`/`connections`.
 New setting `GARMIN_SOCIAL_ENABLED` (default `false`, documented in
 `.env.example`). When off, extensions aren't registered at all: `search`
 doesn't list them and `execute` treats them as unknown. The MCP server's
-`/etc/garmin-mcp/env` turns it on; `rabbit.service` leaves it off. In one-process
-mode the flag covers both surfaces, which is acceptable because one-process mode
-is local development only.
+`/etc/garmin-mcp/env` and `/etc/rabbit/env` both turn it on (Andrew's call,
+2026-10-21): each Rabbit user's coach reads that user's own connections, the same
+isolation as the rest of Rabbit. When the methods are registered, `agent.py`
+appends `SOCIAL_PROMPT` to the coach's system prompt: use friends' data only when
+the athlete asks, keep comparisons about training, and never save a friend's data
+to the athlete's notes, goal or profile.
 
 ### 5. Logging and privacy
 
@@ -190,9 +191,7 @@ server instructions (one line: "for a connection's data, call
 get_connections first, then the get_connection_* methods").
 
 **Later (not committed to):** leaderboards for other metrics, likes and comments
-on activities, an upstream PR to `python-garminconnect`, and Rabbit support
-(that needs its own answer to "may friend X's coach see Andrew's data because
-they're connected?").
+on activities, and an upstream PR to `python-garminconnect`.
 
 ## Open questions
 

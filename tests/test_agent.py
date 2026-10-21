@@ -412,3 +412,23 @@ def test_training_history_tool_reads_garmin(env) -> None:
     result = json.loads(backend.calls[1][-1]["content"][0]["content"])
     assert result["consistency"]["weeks"] in (8, 9) and result["by_sport"]
     assert result["units"] == "metric"
+
+
+def test_connections_prompt_only_when_methods_registered(env) -> None:
+    from garmin_mcp import social
+
+    systems: list[str] = []
+
+    class Spy(Scripted):
+        async def turn(self, *, system, **kw):
+            systems.append(system)
+            return await super().turn(system=system, **kw)
+
+    social_service = GarminService(
+        env.service.provider, Registry(extensions=social.METHODS), allow_writes=False,
+        cache=TTLCache(300), limiter=RateLimiter(100), max_response_bytes=60_000)
+    for service in (env.service, social_service):
+        agent = Agent(service, env.store, Spy([(["Hi"], [], "end_turn")]), daily_token_budget=10_000)
+        go(agent, "friend", "Hello")
+    assert "get_connections" not in systems[0]
+    assert "get_connections" in systems[1] and systems[1].startswith(systems[0])

@@ -26,6 +26,7 @@ if [[ ! -f "$KEYS" ]]; then
 fi
 set -a; . "$KEYS"; set +a
 export MCP_ENABLED=false APP_ENABLED=true PORT=8001 HOST=127.0.0.1 DATA_DIR="$DIR"
+export GARMIN_SOCIAL_ENABLED="${GARMIN_SOCIAL_ENABLED:-true}"
 export VAPID_SUBJECT="${VAPID_SUBJECT:-mailto:dev@localhost.invalid}" LOG_LEVEL=INFO
 
 pids=()

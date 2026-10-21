@@ -34,8 +34,8 @@ read-only, through methods `garminconnect` doesn't have (`social.py`): `get_conn
 `get_connection_personal_records` and `get_connections_leaderboard` (steps). The
 `connection` argument is a name, matched against your own connection list, so nobody
 else can be queried, and Garmin only returns what each connection shares with you.
-A connection's `activity_id` works with the usual activity methods. Leave it off for
-`rabbit.service`. Design and endpoint notes: `docs/plans/connections.md`.
+A connection's `activity_id` works with the usual activity methods. Rabbit uses the same
+flag (in `/etc/rabbit/env`), and its coach prompt gains a training-friends section. Design and endpoint notes: `docs/plans/connections.md`.
 
 ## Layout
 

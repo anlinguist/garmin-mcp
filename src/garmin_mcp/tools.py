@@ -94,6 +94,10 @@ class GarminService:
 
         log_event(logger, logging.INFO, "execute", user_id=user_id, method=info.name,
                   access=info.access.value, arg_names=sorted(kwargs))
+        connection = None
+        if info.resolves_connection:
+            connection = self._resolve_connection(user_id, kwargs.get("connection"))
+            kwargs["connection"] = connection["display_name"]
         if info.access is Access.READ:
             result = self._cached_call(user_id, info.name, info.fn, kwargs)
         else:
@@ -101,7 +105,49 @@ class GarminService:
             self.cache.clear_user(user_id)
         if isinstance(result, bytes | bytearray):  # defensive; binary methods are blocked
             result = {"_omitted": f"{len(result)} bytes of binary data"}
-        return {"method": info.name, **shape(result, full=full, max_bytes=self.max_bytes)}
+        envelope: dict[str, Any] = {"method": info.name}
+        if connection is not None:
+            envelope["connection"] = connection
+        return {**envelope, **shape(result, full=full, max_bytes=self.max_bytes)}
+
+    def _resolve_connection(self, user_id: str, wanted: Any) -> dict[str, Any]:
+        """Match a name against the caller's own (cached) connection list.
+
+        Only a matched entry's display_name ever reaches a request path, so
+        nobody outside the user's connections can be queried.
+        """
+        if not isinstance(wanted, str) or not wanted.strip():
+            raise GarminError("connection is required: a full name or display_name "
+                              "from get_connections")
+        info = self.registry.get("get_connections")
+        if info is None or not info.callable(self.allow_writes):
+            raise GarminError("Connections are not enabled on this server.")
+        listing = self._cached_call(user_id, info.name, info.fn, {})
+        conns = [c for c in (listing or {}).get("connections", [])
+                 if isinstance(c, dict) and c.get("display_name")]
+        w = " ".join(wanted.split()).casefold()
+
+        def full(c: dict[str, Any]) -> str:
+            return " ".join(str(c.get("full_name") or "").split()).casefold()
+
+        stages = (
+            lambda c: str(c["display_name"]).casefold() == w,
+            lambda c: full(c) == w,
+            lambda c: full(c).startswith(w),
+            lambda c: any(part.startswith(w) for part in full(c).split()),
+        )
+        for match in stages:
+            hits = [c for c in conns if match(c)]
+            if len(hits) == 1:
+                return {"display_name": hits[0]["display_name"],
+                        "full_name": hits[0].get("full_name")}
+            if len(hits) > 1:
+                names = ", ".join(sorted(str(c.get("full_name") or c["display_name"])
+                                         for c in hits)[:10])
+                raise GarminError(f"connection {wanted[:60]!r} matches several "
+                                  f"connections ({names}); be more specific.")
+        raise GarminError(f"No connection matches {wanted[:60]!r}. Call get_connections "
+                          "to list them.")
 
     # ---------------------------------------------------- recent_activities --
     def recent_activities(self, user_id: str, days: int = 7,

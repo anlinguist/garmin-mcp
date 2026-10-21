@@ -34,6 +34,7 @@ from .logs import log_event, setup_logging
 from .providers import GarminError, GarminProvider
 from .poller import Poller, PollerThread, RoutineClient, Schedule, StateStore, token_fingerprint
 from .providers.unofficial import UnofficialProvider
+from . import social
 from .registry import Registry
 from .resilience import RateLimiter, TTLCache
 from .secrets import get_secret
@@ -52,6 +53,10 @@ pace, power, HRV, sleep, training load, readiness).
 - Otherwise use search to find a garminconnect method, then execute it.
   Dates are YYYY-MM-DD. Bulky time series are dropped unless full=true.
 - If a result says to re-run garmin-mcp-login, tell the user; don't retry."""
+SOCIAL_INSTRUCTIONS = """
+- For a connection's (friend's) data, call get_connections, then the
+  get_connection_* methods with connection=<their name>. Their activity_ids
+  work with the usual activity methods (get_activity, get_activity_splits)."""
 
 
 def _dev_user(settings: Settings) -> str | None:
@@ -81,7 +86,7 @@ def build_app(settings: Settings, service: GarminService,
         )
     mcp = MCPServer(
         "garmin",
-        instructions=INSTRUCTIONS,
+        instructions=INSTRUCTIONS + (SOCIAL_INSTRUCTIONS if settings.social_enabled else ""),
         auth_server_provider=auth_provider,
         auth=auth,
     )
@@ -354,7 +359,7 @@ def create_app() -> tuple[Settings, Any]:
     )
     if _fake_garmin(settings):
         provider = FakeGarminProvider(token_store)
-    registry = Registry()
+    registry = Registry(extensions=social.METHODS if settings.social_enabled else ())
     service = GarminService(
         provider, registry,
         allow_writes=settings.allow_writes,
@@ -394,7 +399,8 @@ def create_app() -> tuple[Settings, Any]:
                   detail=str(e)[:200] if isinstance(e, RuntimeError) else None)
         poller = None
     log_event(logger, logging.INFO, "startup", base_url=settings.public_base_url,
-              allow_writes=settings.allow_writes, methods=counts,
+              allow_writes=settings.allow_writes, social=settings.social_enabled,
+              methods=counts,
               allowed_users=len(settings.allowed_github_users),
               poller=("off" if poller is None else
                       "dry_run" if settings.poll_dry_run else "on"))

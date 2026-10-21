@@ -1,6 +1,6 @@
 # Plan: read your Garmin connections' data from the MCP server
 
-Status: Phase 0 done 2026-10-21 (results below). Phase 1 not started. Endpoints come from a capture of
+Status: Phase 0 done 2026-10-21 (results below). Phase 1 built 2026-10-21 on branch `connections`; not yet deployed. Endpoints come from a capture of
 connect.garmin.com browsing (connections page, one connection's profile, three of
 their activities) with the out-of-repo `garmin-capture` extension. The capture
 files hold connections' personal data and are never copied into this repo.

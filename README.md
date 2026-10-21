@@ -28,6 +28,15 @@ self-hosted on a small GCP VM with your own Claude API key.
 | `search(query)` | Finds `garminconnect` methods (name, signature, summary, read/write). The index is built by introspecting the installed library at startup. |
 | `execute(method, args, full=false)` | Calls one allowlisted method. Reads are allowed. Writes are blocked unless `GARMIN_ALLOW_WRITES=true`. Credential, raw-request, file-path, GraphQL and binary methods are always blocked. Bulky time series are dropped unless `full=true`, and every response is size-capped with a note when it's truncated. |
 
+With `GARMIN_SOCIAL_ENABLED=true`, `search`/`execute` also cover your connections' data,
+read-only, through methods `garminconnect` doesn't have (`social.py`): `get_connections`,
+`get_connection_profile`, `get_connection_activities`, `get_connection_stats`,
+`get_connection_personal_records` and `get_connections_leaderboard` (steps). The
+`connection` argument is a name, matched against your own connection list, so nobody
+else can be queried, and Garmin only returns what each connection shares with you.
+A connection's `activity_id` works with the usual activity methods. Leave it off for
+`rabbit.service`. Design and endpoint notes: `docs/plans/connections.md`.
+
 ## Layout
 
 ```
@@ -38,6 +47,7 @@ src/garmin_mcp/
   providers/unofficial.py  garminconnect implementation (backoff, token write-back, Cloudflare detection)
   providers/official.py    stub for Garmin's Connect Developer Program
   registry.py          introspected method index + allowlist
+  social.py            connections' data (registry extensions, GARMIN_SOCIAL_ENABLED)
   shaping.py           bulky-field removal + size cap
   resilience.py        TTL cache + per-user rate limiter
   tools.py             search / execute / recent_activities (transport-independent)

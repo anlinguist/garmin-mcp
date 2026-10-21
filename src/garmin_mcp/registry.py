@@ -12,13 +12,16 @@ Security model for ``execute``:
     request bodies, or touch credentials are always BLOCKED.
   * Arguments must bind to the real signature (no *args/**kwargs), keys must be
     plain identifiers, and values must be JSON scalars/containers.
+  * Extensions (our own functions, e.g. ``social.METHODS``) go through the same
+    classification and must come out READ; a name that collides with a library
+    method, or an extension that isn't READ, fails startup.
 """
 
 from __future__ import annotations
 
 import inspect
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from typing import Any
 
@@ -60,6 +63,8 @@ class MethodInfo:
     params: tuple[str, ...]
     fn: Any
     reason: str = ""
+    # Extension whose `connection` arg GarminService resolves against get_connections.
+    resolves_connection: bool = False
 
     def public(self, allow_writes: bool) -> dict[str, Any]:
         return {
@@ -114,8 +119,23 @@ def _classify(name: str, fn: Any, sig: inspect.Signature) -> tuple[Access, str]:
     return Access.BLOCKED, "unclassified method (default deny)"
 
 
+def _info(name: str, fn: Any) -> MethodInfo:
+    sig = inspect.signature(fn)
+    access, reason = _classify(name, fn, sig)
+    shown = sig.replace(parameters=list(sig.parameters.values())[1:])
+    return MethodInfo(
+        name=name,
+        signature=re.sub(r"'([^']*)'", r"\1", str(shown)).replace("typing.", ""),
+        summary=_summary(fn),
+        access=access,
+        params=tuple(list(sig.parameters)[1:]),
+        fn=fn,
+        reason=reason,
+    )
+
+
 class Registry:
-    def __init__(self, cls: type | None = None) -> None:
+    def __init__(self, cls: type | None = None, extensions: tuple[Any, ...] = ()) -> None:
         if cls is None:
             from garminconnect import Garmin
 
@@ -124,19 +144,15 @@ class Registry:
         for name, fn in vars(cls).items():
             if name.startswith("_") or not inspect.isfunction(fn):
                 continue
-            sig = inspect.signature(fn)
-            access, reason = _classify(name, fn, sig)
-            params = tuple(list(sig.parameters)[1:])
-            shown = sig.replace(parameters=list(sig.parameters.values())[1:])
-            self._methods[name] = MethodInfo(
-                name=name,
-                signature=re.sub(r"'([^']*)'", r"\1", str(shown)).replace("typing.", ""),
-                summary=_summary(fn),
-                access=access,
-                params=params,
-                fn=fn,
-                reason=reason,
-            )
+            self._methods[name] = _info(name, fn)
+        for fn in extensions:
+            name = fn.__name__
+            if name in self._methods:
+                raise RuntimeError(f"extension {name} collides with a {cls.__name__} method")
+            info = _info(name, fn)
+            if info.access is not Access.READ:
+                raise RuntimeError(f"extension {name} is not read-only ({info.reason})")
+            self._methods[name] = replace(info, resolves_connection="connection" in info.params)
         self._tokens = {
             n: set(_tokenize(f"{n} {m.summary} {' '.join(m.params)}"))
             for n, m in self._methods.items()
@@ -259,4 +275,9 @@ _SYNONYMS: dict[str, set[str]] = {
     "zones": {"zone", "timezones"},
     "weight": {"weigh", "body", "composition"},
     "tss": {"training", "load"},
+    "friend": {"connection", "connections"},
+    "friends": {"connection", "connections"},
+    "buddy": {"connection", "connections"},
+    "connection": {"connections"},
+    "connections": {"connection"},
 }

@@ -85,6 +85,8 @@ class Settings:
 
     # Behaviour
     allow_writes: bool = False
+    # Read connections' (friends') data via social.py registry extensions.
+    social_enabled: bool = False
     garmin_api_tls_impersonation: bool = False
     cache_ttl_seconds: int = 300
     rate_limit_per_minute: int = 30
@@ -195,6 +197,7 @@ class Settings:
             ),
             oauth_allow_loopback_redirects=_bool("OAUTH_ALLOW_LOOPBACK_REDIRECTS", True),
             allow_writes=_bool("GARMIN_ALLOW_WRITES", False),
+            social_enabled=_bool("GARMIN_SOCIAL_ENABLED", False),
             garmin_api_tls_impersonation=_bool("GARMIN_API_TLS_IMPERSONATION", False),
             cache_ttl_seconds=_int("CACHE_TTL_SECONDS", 300),
             rate_limit_per_minute=_int("RATE_LIMIT_PER_MINUTE", 30),

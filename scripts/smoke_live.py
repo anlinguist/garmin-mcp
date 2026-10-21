@@ -4,7 +4,7 @@
 Prereq: garmin-mcp-login has been run for the user on this machine.
 Usage (on the VM):
     sudo -u garmin-mcp bash -c 'set -a; . /etc/garmin-mcp/env; set +a; \
-        /opt/garmin-mcp/.venv/bin/python /opt/garmin-mcp/scripts/smoke_live.py --user andrew'
+        /opt/garmin-mcp/current/.venv/bin/python /opt/garmin-mcp/current/scripts/smoke_live.py --user andrew'
 
 Prints only counts, dates, sports and IDs, never raw payloads.
 """

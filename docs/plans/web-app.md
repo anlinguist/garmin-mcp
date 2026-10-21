@@ -3,7 +3,7 @@
 "Rabbit" is the pacer in a race: it sets the pace so you can hit your goal.
 Sibling to Dolly (`web-mcp`): same look, own logo.
 
-Status: Phase 1 built on branch `rabbit-web` (2026-10-11): config, encrypted store, Google sign-in + sessions, Web Push, `/app` routes with the Phase 0 device checks, and the Vite frontend scaffold with Dolly's styles and the Rabbit mark. Not yet deployed.
+Status: live since 2026-10-12 at `https://<domain>/app/` as its own `rabbit.service` (deploy with `./deploy.sh --rabbit`). Phase 1 was built on branch `rabbit-web` (2026-10-11).
 
 ## Goal
 

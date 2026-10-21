@@ -241,9 +241,13 @@ def compact_activity(a: dict[str, Any]) -> dict[str, Any]:
     if "swim" in key:
         out["avg_pace_per_100m"] = _pace(speed, 100)
         pool = a.get("poolLength")
-        unit = (a.get("unitOfPoolLength") or {}).get("unitKey") if isinstance(
-            a.get("unitOfPoolLength"), dict) else None
-        out["pool_length"] = f"{_round(pool)} {unit or ''}".strip() if pool else None
+        upl = a.get("unitOfPoolLength") if isinstance(a.get("unitOfPoolLength"), dict) else {}
+        unit, factor = upl.get("unitKey"), upl.get("factor")
+        # Activity lists give poolLength in cm; factor is cm per unit (91.44 for yard).
+        if isinstance(pool, int | float) and isinstance(factor, int | float) and factor > 0:
+            pool = pool / factor
+        out["pool_length"] = f"{_round(pool)} {unit or ''}".strip() if isinstance(
+            pool, int | float) and pool else None
         out["strokes"] = a.get("strokes")
         out["avg_swolf"] = _round(a.get("averageSwolf"), 0)
         out["active_lengths"] = a.get("activeLengths")

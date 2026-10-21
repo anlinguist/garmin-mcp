@@ -104,3 +104,18 @@ def test_small_response_not_truncated() -> None:
 def test_full_true_still_capped() -> None:
     out = shape({"xs": list(range(100_000))}, full=True, max_bytes=5_000)
     assert out["truncated"] is True
+
+
+def test_pool_length_converts_garmin_centimeters() -> None:
+    from garmin_mcp.tools import compact_activity
+
+    def swim(**kw: Any) -> dict[str, Any]:
+        return compact_activity({"activityType": {"typeKey": "lap_swimming"}, **kw})
+
+    # Activity lists report cm with a cm-per-unit factor (seen live: 2286 for a 25 yd pool).
+    assert swim(poolLength=2286.000064509876,
+                unitOfPoolLength={"unitKey": "yard", "factor": 91.44})["pool_length"] == "25.0 yard"
+    assert swim(poolLength=2500.0,
+                unitOfPoolLength={"unitKey": "meter", "factor": 100.0})["pool_length"] == "25.0 meter"
+    assert swim(poolLength=25.0, unitOfPoolLength={"unitKey": "meter"})["pool_length"] == "25.0 meter"
+    assert "pool_length" not in swim()
